@@ -1,16 +1,16 @@
-"""Stub primary-sidebar view behind the activity bar's bookshelf icon (PROMPT.md: "a bookshelf
-with the label Scripts (also stubbed for now)"). No real content yet -- same placeholder-only
-treatment as :mod:`in_reach.ide.documentation_panel`.
+"""Stub primary-sidebar view behind the activity bar's test-tube icon (PROMPT.md: "above maps icon,
+please add a stubbed entrance for Testing (using a testube)"). No real content yet -- same
+placeholder-only treatment as :mod:`in_reach.ide.scripts_panel`.
 """
 
 from __future__ import annotations
 
 from PyQt6.QtWidgets import QLabel, QVBoxLayout, QWidget
 
-_PLACEHOLDER_TEXT = "Scripts -- coming soon."
+_PLACEHOLDER_TEXT = "Testing -- coming soon."
 
 
-class ScriptsPanel(QWidget):
+class TestingPanel(QWidget):
     def __init__(self, parent: QWidget | None = None) -> None:
         super().__init__(parent)
         layout = QVBoxLayout(self)
