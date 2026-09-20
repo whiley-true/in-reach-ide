@@ -1,4 +1,4 @@
-from in_reach.ide.json_breadcrumb import json_breadcrumb_path
+from in_reach_ide.json_breadcrumb import json_breadcrumb_path
 
 
 def test_at_the_very_start_is_the_root_with_no_path() -> None:

@@ -2,7 +2,7 @@
 project open at a time per window (PROMPT.md: "we now want it to be 1 per window" -- this panel
 used to hold a tab strip for several open projects at once; opening a second one while one's
 already open is now MainWindow's own "Open in this window / Open in new window" popup instead, see
-:meth:`~in_reach.ide.main_window.MainWindow._open_project_with_popup`), three boxes for the active
+:meth:`~in_reach_ide.main_window.MainWindow._open_project_with_popup`), three boxes for the active
 project, top to bottom (PROMPT.md: "please move stats to the top of the panel") -- "Stats"
 summarizing its build's own space usage and per-subsystem (Triggers/Conditions/Actions/Forge
 Labels/Strings) counts against this project's own confirmed engine caps (see
@@ -24,12 +24,12 @@ tab's own Verify System Settings flow.
 
 A fifth box, "Notepad" (PROMPT.md: "in dashboard please add a 'Notepad' section that should be box at
 the bottom"), takes whatever vertical room is left at the bottom of the panel: a line-numbered,
-autosaving view of the project's own ``Notes.txt`` (see :mod:`in_reach.ide.notepad`), with buttons that
+autosaving view of the project's own ``Notes.txt`` (see :mod:`in_reach_ide.notepad`), with buttons that
 hand the same file to a real editor tab or a popout window. Quick Launch also carries an "Open
 In-Reach Maps" button, opening in-reach's own ``.in-reach/maps`` folder.
 
 The Settings tree is a plain ``QFileSystemModel``/``QTreeView`` pair (so it reflects live disk
-changes for free) with a custom icon provider (:mod:`in_reach.ide.file_icons`) swapped in for the
+changes for free) with a custom icon provider (:mod:`in_reach_ide.file_icons`) swapped in for the
 platform's own generic file icons.
 """
 
@@ -55,10 +55,10 @@ from PyQt6.QtWidgets import (
 
 from in_reach.app import new_project, system_verify
 from in_reach.app.rvt import settings_io, strings_io
-from in_reach.ide.collapsible_section import CollapsibleSection as _CollapsibleSection
-from in_reach.ide.collapsible_section import SECTION_HEADER_STYLE
-from in_reach.ide.file_icons import ExplorerIconProvider
-from in_reach.ide.notepad import NotepadBox
+from in_reach_ide.collapsible_section import CollapsibleSection as _CollapsibleSection
+from in_reach_ide.collapsible_section import SECTION_HEADER_STYLE
+from in_reach_ide.file_icons import ExplorerIconProvider
+from in_reach_ide.notepad import NotepadBox
 
 _NO_PROJECT_TEXT = "No project opened yet -- create or load one from the Welcome tab."
 _NO_STATS_TEXT = "No build stats yet -- Apply (or launch RVT) once this gametype compiles."
@@ -156,7 +156,7 @@ def _point_tree_at(tree: QTreeView, model: QFileSystemModel, folder: Path | None
 #: header reads as plain text-plus-arrow, not a button.
 #: PROMPT.md: "please update dashbaord so headings are bold and subheadings are italic" -- applies
 #: to every _CollapsibleSection header (Stats/Quick Launch/Settings), on top of the plain-text/no-
-#: background treatment above. See :mod:`in_reach.ide.collapsible_section` for the widget itself
+#: background treatment above. See :mod:`in_reach_ide.collapsible_section` for the widget itself
 #: (factored out once the Git panel needed the same treatment) -- this alias is kept so every
 #: existing ``_SECTION_HEADER_STYLE`` reference in this file stays valid.
 _SECTION_HEADER_STYLE = SECTION_HEADER_STYLE
@@ -277,11 +277,13 @@ class ExplorerPanel(QWidget):
     #: does (compiling + a save-as dialog; regenerating and opening the locked output view).
     export_requested = pyqtSignal()
     view_output_requested = pyqtSignal()
+    #: "View Decompiled" -- the built script as RVT shows it, next to "View Compiled".
+    view_decompiled_requested = pyqtSignal()
 
     #: PROMPT.md: "we are removing locations, and rvt ... please add a button in between Export
     #: File and View Compiled ... for Launch RVT" -- replaces the activity bar's own former RVT
     #: launcher icon (see activity_bar.py's own history); MainWindow owns actually launching it
-    #: (:meth:`~in_reach.ide.main_window.MainWindow.launch_rvt`), same division of labor as
+    #: (:meth:`~in_reach_ide.main_window.MainWindow.launch_rvt`), same division of labor as
     #: export_requested/view_output_requested above.
     launch_rvt_requested = pyqtSignal()
 
@@ -290,12 +292,12 @@ class ExplorerPanel(QWidget):
     #: with the :mod:`in_reach.app.system_verify` env key each button's own folder resolves under
     #: (e.g. :data:`~in_reach.app.system_verify.STANDARD_VARIANTS_KEY`); MainWindow owns actually
     #: resolving and opening it (it's the one that already knows this window's own ``root_dir``,
-    #: see :meth:`~in_reach.ide.main_window.MainWindow._open_builtin_folder`), same division of
+    #: see :meth:`~in_reach_ide.main_window.MainWindow._open_builtin_folder`), same division of
     #: labor as export_requested/launch_rvt_requested above.
     open_builtin_folder_requested = pyqtSignal(str)
 
     #: PROMPT.md: "it should be possible to load in editor tab or in popout window" -- the Notepad
-    #: box's own two buttons (see :class:`~in_reach.ide.notepad.NotepadBox`); MainWindow owns
+    #: box's own two buttons (see :class:`~in_reach_ide.notepad.NotepadBox`); MainWindow owns
     #: actually opening either.
     notepad_open_in_editor_requested = pyqtSignal()
     notepad_open_in_window_requested = pyqtSignal()
@@ -458,6 +460,14 @@ class ExplorerPanel(QWidget):
         self.view_output_button.setStyleSheet(_DASHBOARD_BUTTON_STYLE)
         self.view_output_button.clicked.connect(self.view_output_requested.emit)
         button_row_layout.addWidget(self.view_output_button)
+        self.view_decompiled_button = QToolButton()
+        self.view_decompiled_button.setText("View Decompiled")
+        self.view_decompiled_button.setToolTip("Open a read-only view of the built script as ReachVariantTool shows it")
+        self.view_decompiled_button.setCursor(Qt.CursorShape.PointingHandCursor)
+        self.view_decompiled_button.setAutoRaise(False)
+        self.view_decompiled_button.setStyleSheet(_DASHBOARD_BUTTON_STYLE)
+        self.view_decompiled_button.clicked.connect(self.view_decompiled_requested.emit)
+        button_row_layout.addWidget(self.view_decompiled_button)
         self.button_row = button_row
         quick_launch_layout.addWidget(self.button_row)
 

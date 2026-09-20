@@ -1,6 +1,6 @@
 from pathlib import Path
 
-from in_reach.app import project_search
+from in_reach_ide import project_search
 
 
 def test_search_project_finds_matches_across_multiple_files(tmp_path: Path) -> None:

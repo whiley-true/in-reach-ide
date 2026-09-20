@@ -8,12 +8,12 @@ only in Open Editors) and files to exclude"). A gametype project's own text file
 against a large codebase the way a real IDE's project-wide search would.
 
 :func:`compile_search_pattern`/:func:`preserve_case` live here (rather than in the editor's own
-Find/Replace bar, :mod:`in_reach.ide.find_replace`, which re-exports them) so the in-editor bar and
+Find/Replace bar, :mod:`in_reach_ide.find_replace`, which re-exports them) so the in-editor bar and
 this project-wide search can never disagree about what "matches" or what "preserve case" does.
 
 Every file under the project root is tried as UTF-8 text; anything that fails to decode (a
 compiled ``.bin``/``.mvar``, or ``build/``'s own output) is silently skipped, the same convention
-:meth:`in_reach.ide.tabs.TabPane.open_file` already uses for the same reason.
+:meth:`in_reach_ide.tabs.TabPane.open_file` already uses for the same reason.
 """
 
 from __future__ import annotations

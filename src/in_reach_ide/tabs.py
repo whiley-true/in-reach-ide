@@ -12,7 +12,7 @@ and the tab's own text turns italic, while dirty; closing a dirty tab prompts Sa
 Cancel, with Save falling back to a native Save As dialog the first time), and can be right-clicked
 for a VSCode-style context menu (close variants, copy/reveal path actions -- only enabled once a
 tab has a real file behind it -- pin, and split). A ``.md`` file opens as a rendered, read-only
-:class:`~in_reach.ide.markdown_preview.MarkdownPreviewWidget` instead (PROMPT.md: "please make .md
+:class:`~in_reach_ide.markdown_preview.MarkdownPreviewWidget` instead (PROMPT.md: "please make .md
 be preview when opened") -- never dirty, never saveable, same as the Welcome tab.
 """
 
@@ -51,13 +51,13 @@ from PyQt6.QtWidgets import (
 )
 
 from in_reach.app.new_project import is_generated_file
-from in_reach.ide import file_dialogs, icons, schema_check, style
-from in_reach.ide.diff_view import DiffViewWidget
-from in_reach.ide.editor import TextEditorWidget
-from in_reach.ide.kanban_board import KanbanBoardView
-from in_reach.ide.pane_splitter import PaneSplitter
-from in_reach.ide.markdown_preview import MarkdownPreviewWidget
-from in_reach.ide.welcome import WelcomeTab
+from in_reach_ide import file_dialogs, icons, schema_check, style
+from in_reach_ide.diff_view import DiffViewWidget
+from in_reach_ide.editor import TextEditorWidget
+from in_reach_ide.kanban_board import KanbanBoardView
+from in_reach_ide.pane_splitter import PaneSplitter
+from in_reach_ide.markdown_preview import MarkdownPreviewWidget
+from in_reach_ide.welcome import WelcomeTab
 
 _MIME_TYPE = "application/x-inreach-tab"
 _MAX_H_SPLITS = 2  # -> up to 3 pane-groups side by side
@@ -381,9 +381,9 @@ class TabPane(QTabWidget):
 
     def _refresh_preview_button(self) -> None:
         """Shows :attr:`preview_button` only while the active tab is an editable Markdown one --
-        a :class:`~in_reach.ide.editor.TextEditorWidget` opened via ``open_file(...,
+        a :class:`~in_reach_ide.editor.TextEditorWidget` opened via ``open_file(...,
         editable_markdown=True)``, identifiable after the fact by its own ``.md`` path (a plain
-        :class:`~in_reach.ide.markdown_preview.MarkdownPreviewWidget` tab, opened for every other
+        :class:`~in_reach_ide.markdown_preview.MarkdownPreviewWidget` tab, opened for every other
         ``.md`` file, is never a ``TextEditorWidget`` in the first place -- see ``open_file``)."""
         widget = self.currentWidget()
         is_editable_markdown = (
@@ -554,10 +554,10 @@ class TabPane(QTabWidget):
                 whatever was loaded when it was first opened) -- for a file that's meant to reflect
                 its current on-disk content every time it's (re-)opened, e.g. the Dashboard's own
                 "View Output.txt" button, which regenerates the file it opens on every click (see
-                :meth:`~in_reach.ide.main_window.MainWindow.view_output_txt`).
+                :meth:`~in_reach_ide.main_window.MainWindow.view_output_txt`).
             editable_markdown: Opens a ``.md`` file as a real, editable
-                :class:`~in_reach.ide.editor.TextEditorWidget` instead of the usual read-only
-                :class:`~in_reach.ide.markdown_preview.MarkdownPreviewWidget` (PROMPT.md, "Notes"
+                :class:`~in_reach_ide.editor.TextEditorWidget` instead of the usual read-only
+                :class:`~in_reach_ide.markdown_preview.MarkdownPreviewWidget` (PROMPT.md, "Notes"
                 when Notes format is Markdown: "editor should be .md" -- with the magnifying-glass
                 split-to-live-preview icon, see
                 :meth:`_refresh_preview_button`, this is where an editable Markdown source and its
@@ -616,7 +616,7 @@ class TabPane(QTabWidget):
 
     def open_diff(self, rel_path: str, *, old_text: str | None, new_text: str | None) -> None:
         """Opens (or refreshes and switches to, if already open) a side-by-side
-        :class:`~in_reach.ide.diff_view.DiffViewWidget` tab for ``rel_path``'s own uncommitted
+        :class:`~in_reach_ide.diff_view.DiffViewWidget` tab for ``rel_path``'s own uncommitted
         change -- PROMPT.md: "when clicking on changes to a file (in the changes tab) a tab should
         appear showing the original on the left and highlighted changes on the right (like vscode
         git)". Called by ``MainWindow.vcs_open_diff`` whenever a file is clicked in the Git panel's
@@ -626,7 +626,7 @@ class TabPane(QTabWidget):
         isn't the real file itself (giving it that same :class:`Path` would make this method's own
         dedup below collide with :meth:`open_file`'s: clicking ``rel_path`` in the Explorer while
         its diff tab happens to sit earlier in this pane would silently land on the read-only diff
-        instead of the real editable file). Matched by :attr:`~in_reach.ide.diff_view.
+        instead of the real editable file). Matched by :attr:`~in_reach_ide.diff_view.
         DiffViewWidget.rel_path` instead, a plain widget attribute :meth:`open_file` never looks at,
         so the two can never step on each other.
 
@@ -678,7 +678,7 @@ class TabPane(QTabWidget):
         self, rel_path: str, sha: str, *, old_text: str | None, new_text: str | None
     ) -> None:
         """Opens (or refreshes and switches to, if already open) a single, *unified* (not split)
-        :class:`~in_reach.ide.unified_diff_view.UnifiedDiffViewWidget` tab for ``rel_path`` as
+        :class:`~in_reach_ide.unified_diff_view.UnifiedDiffViewWidget` tab for ``rel_path`` as
         changed by commit ``sha`` -- PROMPT.md: "please make it so that when clicking in history on
         commits - it extends to show a list of files changed (which can then be clicked on to view
         (please note this should be a single (not split) view, see sample.png for styling))".
@@ -687,7 +687,7 @@ class TabPane(QTabWidget):
         :meth:`open_head_file` -- matched by ``(rel_path, sha)`` together (a single file can appear
         in more than one commit, and different commits' own diffs of it are never the same tab).
         """
-        from in_reach.ide.unified_diff_view import UnifiedDiffViewWidget
+        from in_reach_ide.unified_diff_view import UnifiedDiffViewWidget
 
         for index in range(self.count()):
             widget = self.widget(index)
@@ -731,7 +731,7 @@ class TabPane(QTabWidget):
         editor tab -- PROMPT.md: "when clicked it should load the default board in the editor view".
         Tracked with ``_TabState(path=None)``, same reasoning as :meth:`open_diff` -- a board isn't a
         file, so it must never collide with :meth:`open_file`'s own path-based dedup; matched by
-        :attr:`~in_reach.ide.kanban_board.KanbanBoardView.board_id` instead."""
+        :attr:`~in_reach_ide.kanban_board.KanbanBoardView.board_id` instead."""
         for index in range(self.count()):
             widget = self.widget(index)
             if isinstance(widget, KanbanBoardView) and widget.board_id == board_id:
@@ -1254,7 +1254,7 @@ class MainPanelArea(QWidget):
         deletion state, or how many other views reference it. Destroying any *other* (non-owning)
         view sharing the same document is always safe. (A single ``setDocument()`` call per editor
         instance, never a second one replacing an already-set document, is also required --
-        :meth:`~in_reach.ide.editor._PlainTextEditor.__init__`'s own docstring covers that half.)
+        :meth:`~in_reach_ide.editor._PlainTextEditor.__init__`'s own docstring covers that half.)
 
         Every :class:`TextEditorWidget` tab registers its own document here as soon as it's tracked
         (see ``TabPane._track_tab``); the first registration for a given document also records
@@ -1277,7 +1277,7 @@ class MainPanelArea(QWidget):
         Ordinarily ``True`` -- but if ``widget`` is the document's own owner (see
         :meth:`_register_document_user`) and other views still share it, returns ``False`` instead:
         the caller must keep ``widget`` alive (hidden, unparented) rather than destroy it, per this
-        method's own docstring. :meth:`~in_reach.ide.tabs.TabPane._release_tab_widget` is the only
+        method's own docstring. :meth:`~in_reach_ide.tabs.TabPane._release_tab_widget` is the only
         caller, and does exactly that. Once every other sharing view has since closed too, whichever
         one closes last triggers this method to finally ``deleteLater()`` the parked owner itself
         (its own destruction cascades to the document too, since it was never reparented away from
@@ -1376,7 +1376,7 @@ class MainPanelArea(QWidget):
 
     def save_paths(self, paths: list[Path]) -> None:
         """Saves every already-open tab for one of ``paths`` that has unsaved edits -- used by
-        :meth:`~in_reach.ide.main_window.MainWindow._warn_unsaved_settings_before_rvt`'s own "Save
+        :meth:`~in_reach_ide.main_window.MainWindow._warn_unsaved_settings_before_rvt`'s own "Save
         and Continue" button (PROMPT.md) to clear exactly the dirty settings/script_settings/
         strings.json tabs blocking an RVT launch, without touching unrelated dirty tabs elsewhere."""
         for pane, index in self._open_tab_locations(set(paths)):
@@ -1387,7 +1387,7 @@ class MainPanelArea(QWidget):
         """The (sorted, deduplicated) file names of any already-open tab for one of ``paths`` that
         has unsaved edits -- PROMPT.md: RVT resyncing a project's own settings/script_settings/
         strings.json "with unsaved changes should pop up showing all unsaved changes[.]" Used by
-        :meth:`~in_reach.ide.main_window.MainWindow._on_watched_bin_changed` to decide whether that
+        :meth:`~in_reach_ide.main_window.MainWindow._on_watched_bin_changed` to decide whether that
         resync needs confirming first."""
         names = {
             pane._tab_state_for(pane.widget(index)).path.name
@@ -1414,7 +1414,7 @@ class MainPanelArea(QWidget):
 
     def dirty_tab_names_under(self, folder: Path) -> list[str]:
         """The (sorted, deduplicated) file names of any already-open tab anywhere under ``folder``
-        that has unsaved edits -- used by :meth:`~in_reach.ide.main_window.MainWindow.
+        that has unsaved edits -- used by :meth:`~in_reach_ide.main_window.MainWindow.
         vcs_switch_branch` (PROMPT.md: "it should be possible ... to change and switch
         versions/branches") to warn before a branch switch overwrites files on disk out from under
         an open, unsaved tab."""
@@ -1543,7 +1543,7 @@ class MainPanelArea(QWidget):
     def preview_split_from(self, source: TabPane) -> None:
         """The magnifying-glass icon's own split (PROMPT.md, Notes-as-Markdown: "editor should
         split to show live .md preview on the right hand side") -- a horizontal split like
-        :meth:`split_from`, but seeded with a *live* :class:`~in_reach.ide.markdown_preview.
+        :meth:`split_from`, but seeded with a *live* :class:`~in_reach_ide.markdown_preview.
         MarkdownPreviewWidget` following ``source``'s current tab (see :meth:`MarkdownPreviewWidget.
         follow_live`) instead of a plain duplicate. A no-op if ``source``'s current tab isn't an
         editable Markdown one, or the split cap is already reached."""
@@ -1600,7 +1600,7 @@ class MainPanelArea(QWidget):
         Also re-``refresh()``es any open Welcome tab (PROMPT.md: "when a project is renamed, it
         needs to be renamed in recents ... and in the welcome window") -- its own Recent list
         reads the same on-disk title back via :func:`~in_reach.app.new_project.read_project_title`,
-        but only when :meth:`~in_reach.ide.welcome.WelcomeTab.refresh` actually runs, which a
+        but only when :meth:`~in_reach_ide.welcome.WelcomeTab.refresh` actually runs, which a
         rename elsewhere doesn't otherwise trigger."""
         for pane in self.panes:
             for index in range(pane.count()):

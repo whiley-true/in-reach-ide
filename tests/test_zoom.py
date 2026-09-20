@@ -6,8 +6,8 @@ from PyQt6.QtGui import QFont, QKeySequence
 from PyQt6.QtWidgets import QApplication
 
 from in_reach.app import env_file
-from in_reach.ide import zoom
-from in_reach.ide.main_window import MainWindow
+from in_reach_ide import zoom
+from in_reach_ide.main_window import MainWindow
 
 
 @pytest.fixture
@@ -195,7 +195,7 @@ def test_zooming_resizes_the_top_left_mark_icon(
 def test_zooming_keeps_the_explorer_panel_at_its_own_10_percent_scale(
     project_window: MainWindow, monkeypatch
 ) -> None:
-    from in_reach.ide.explorer import ExplorerPanel
+    from in_reach_ide.explorer import ExplorerPanel
 
     base_size = _normalize_zoom(monkeypatch)
     project_window.explorer_panel.refresh_font_scale()

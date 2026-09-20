@@ -4,7 +4,7 @@ import pytest
 from PyQt6.QtWidgets import QApplication
 
 from in_reach.app import vcs
-from in_reach.ide.git_panel import GitPanel
+from in_reach_ide.git_panel import GitPanel
 
 
 @pytest.fixture

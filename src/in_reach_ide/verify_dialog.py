@@ -31,7 +31,7 @@ from PyQt6.QtWidgets import (
 
 from in_reach.app import system_verify
 from in_reach.app.system_verify import STEPS, Outcome, StepResult, VerifyRun, VerifyStep
-from in_reach.ide import file_dialogs
+from in_reach_ide import file_dialogs
 
 # Long enough that a run of self-resolving steps reads as a checklist ticking over rather than as
 # one instantaneous jump, short enough that twelve of them don't feel like waiting.

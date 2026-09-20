@@ -1,6 +1,6 @@
 from PyQt6.QtWidgets import QFileDialog, QWidget
 
-from in_reach.ide import file_dialogs
+from in_reach_ide import file_dialogs
 
 
 def test_center_on_parent_screen_centers_the_dialog_on_the_parents_screen(qtbot) -> None:

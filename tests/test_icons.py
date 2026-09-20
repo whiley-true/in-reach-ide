@@ -1,4 +1,4 @@
-from in_reach.ide import icons
+from in_reach_ide import icons
 
 
 def _has_opaque_pixel(image) -> bool:

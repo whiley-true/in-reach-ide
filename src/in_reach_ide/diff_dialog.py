@@ -4,7 +4,7 @@ diff on the right, same master-detail shape as any plain git GUI's own diff view
 
 PROMPT.md (a later pass): "please then add text colourings and line numbers in the compare window
 to make the text and changes clearer and more visually appealing" -- the selected file's own diff is
-now a real :class:`~in_reach.ide.diff_view.DiffViewWidget` (line-numbered, JSON-syntax-highlighted,
+now a real :class:`~in_reach_ide.diff_view.DiffViewWidget` (line-numbered, JSON-syntax-highlighted,
 red/green line coloring), the exact same widget the Changes tab's own "Open Changes" already opens
 as a tab, just fed by :func:`~in_reach.app.vcs.ref_file_diff` (two committed refs) instead of
 :func:`~in_reach.app.vcs.uncommitted_file_diff` (``HEAD`` vs. the live working tree) -- this replaced
@@ -19,7 +19,7 @@ from PyQt6.QtWidgets import QDialog, QHBoxLayout, QLabel, QListWidget, QVBoxLayo
 
 from in_reach.app import vcs
 from in_reach.app.vcs import FileDiff
-from in_reach.ide.diff_view import DiffViewWidget
+from in_reach_ide.diff_view import DiffViewWidget
 
 _CHANGE_PREFIX = {"added": "+ ", "removed": "- ", "modified": "M "}
 _NO_DIFF_TEXT = "(no differences)"

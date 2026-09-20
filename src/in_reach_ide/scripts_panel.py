@@ -5,7 +5,7 @@ which blocks they contribute to, the engine budget -- every storage pool, resour
 counters the last build measured, each against its cap -- and what fusion did (merged triggers, and every merge it
 declined and why). For any other project it offers to turn the single script into a script project.
 
-The panel does no linking of its own: :class:`~in_reach.ide.main_window.MainWindow` links once per change and hands the
+The panel does no linking of its own: :class:`~in_reach_ide.main_window.MainWindow` links once per change and hands the
 result to :meth:`ScriptsPanel.show_link`, the same one the Problems tab reads.
 """
 
@@ -16,10 +16,12 @@ from pathlib import Path
 from PyQt6.QtCore import Qt, pyqtSignal
 from PyQt6.QtGui import QBrush, QColor
 from PyQt6.QtWidgets import (
+    QAbstractItemView,
     QComboBox,
     QFrame,
     QHBoxLayout,
     QLabel,
+    QMenu,
     QPushButton,
     QScrollArea,
     QTreeWidget,
@@ -34,6 +36,8 @@ _NO_PROFILE = "No profile"
 _WARN = QColor("#d19a2e")
 _ERROR = QColor("#d9534f")
 _PATH_ROLE = Qt.ItemDataRole.UserRole
+_NAME_ROLE = Qt.ItemDataRole.UserRole + 1
+_FRAGMENT_ROLE = Qt.ItemDataRole.UserRole + 2
 
 _NOT_LINKED_TEXT = (
     "This project's script is a single file, script/output.txt.\n\n"
@@ -77,6 +81,12 @@ class ScriptsPanel(QWidget):
     new_module_requested = pyqtSignal()
     #: A module or block row was activated: open this file.
     open_file_requested = pyqtSignal(Path)
+    #: ``(module name, enabled)`` -- a module's checkbox was ticked or cleared.
+    module_toggled = pyqtSignal(str, bool)
+    #: The blocks were dragged into a new order (every block name, in order).
+    blocks_reordered = pyqtSignal(list)
+    #: ``(fragment id, block)`` -- "Move to" was chosen on a fragment.
+    fragment_move_requested = pyqtSignal(str, str)
 
     def __init__(self, parent: QWidget | None = None) -> None:
         super().__init__(parent)
@@ -136,11 +146,20 @@ class ScriptsPanel(QWidget):
         linked.addWidget(_section("Modules"))
         self.modules_tree = _tree(["Module", "Blocks"], 60)
         self.modules_tree.itemActivated.connect(self._on_row_activated)
+        self.modules_tree.itemChanged.connect(self._on_module_checked)
         linked.addWidget(self.modules_tree)
 
         linked.addWidget(_section("Blocks"))
         self.blocks_tree = _tree(["Block", "Source"], 60)
         self.blocks_tree.itemActivated.connect(self._on_row_activated)
+        # Drag a block up or down to change the order it is built in. Only blocks move (a fragment's row has no drag handle
+        # and nothing accepts a drop *onto* a row), so the tree can only ever be re-ordered, never re-parented.
+        self.blocks_tree.setDragDropMode(QAbstractItemView.DragDropMode.InternalMove)
+        self.blocks_tree.setDefaultDropAction(Qt.DropAction.MoveAction)
+        self.blocks_tree.setDropIndicatorShown(True)
+        self.blocks_tree.model().rowsMoved.connect(self._on_blocks_moved)
+        self.blocks_tree.setContextMenuPolicy(Qt.ContextMenuPolicy.CustomContextMenu)
+        self.blocks_tree.customContextMenuRequested.connect(self._on_blocks_menu)
         linked.addWidget(self.blocks_tree)
 
         linked.addWidget(_section("Budget"))
@@ -191,37 +210,61 @@ class ScriptsPanel(QWidget):
         self.profile_combo.blockSignals(False)
 
         self._fill_modules(result.project)
-        self._fill_blocks(result.project)
+        self._fill_blocks(result.project, getattr(result, "model", None))
         self._fill_budget(result)
         self._fill_fusion(result)
 
     # -- content -----------------------------------------------------------------------------------------
 
     def _fill_modules(self, project) -> None:
+        self.modules_tree.blockSignals(True)  # filling isn't the user ticking anything
         self.modules_tree.clear()
         for module in project.modules if project is not None else []:
             version = module.manifest.module.version
             item = QTreeWidgetItem([f"{module.name} {version}", ", ".join(module.blocks) or "-"])
+            item.setFlags(item.flags() | Qt.ItemFlag.ItemIsUserCheckable)
+            item.setCheckState(0, Qt.CheckState.Checked)
+            item.setData(0, _NAME_ROLE, module.name)
             first = module.files[0].path if module.files else None
             if first is not None:
                 item.setData(0, _PATH_ROLE, str(project.folder / "script" / first))
             self.modules_tree.addTopLevelItem(item)
+        for name in project.disabled_modules if project is not None else []:
+            item = QTreeWidgetItem([f"{name} (off)", "-"])
+            item.setFlags(item.flags() | Qt.ItemFlag.ItemIsUserCheckable)
+            item.setCheckState(0, Qt.CheckState.Unchecked)
+            item.setData(0, _NAME_ROLE, name)
+            item.setForeground(0, QBrush(QColor("#888888")))
+            self.modules_tree.addTopLevelItem(item)
+        self.modules_tree.blockSignals(False)
 
-    def _fill_blocks(self, project) -> None:
+    def _fill_blocks(self, project, model=None) -> None:
+        self.blocks_tree.blockSignals(True)
+        self.blocks_tree.model().blockSignals(True)  # rebuilding the tree isn't the user reordering it
         self.blocks_tree.clear()
-        if project is None:
-            return
-        for name in project.order:
-            block = project.blocks.get(name)
-            if block is None:
-                continue
-            source = block.file.path if block.file is not None else "fragments only"
-            if block.contributors:
-                source += f"  + {', '.join(block.contributors)}"
-            item = QTreeWidgetItem([name, source])
-            if block.file is not None:
-                item.setData(0, _PATH_ROLE, str(project.folder / "script" / block.file.path))
-            self.blocks_tree.addTopLevelItem(item)
+        if project is not None:
+            for name in project.order:
+                block = project.blocks.get(name)
+                if block is None:
+                    continue
+                source = block.file.path if block.file is not None else "fragments only"
+                if block.contributors:
+                    source += f"  + {', '.join(block.contributors)}"
+                item = QTreeWidgetItem([name, source])
+                item.setData(0, _NAME_ROLE, name)
+                item.setFlags(item.flags() & ~Qt.ItemFlag.ItemIsDropEnabled)  # nothing is dropped *onto* a block
+                if block.file is not None:
+                    item.setData(0, _PATH_ROLE, str(project.folder / "script" / block.file.path))
+                for fragment in model.fragments_of(name) if model is not None else []:
+                    child = QTreeWidgetItem([f"  {fragment.id}", f"for each {fragment.loop}"])
+                    child.setData(0, _FRAGMENT_ROLE, fragment.id)
+                    child.setFlags(child.flags() & ~Qt.ItemFlag.ItemIsDragEnabled & ~Qt.ItemFlag.ItemIsDropEnabled)
+                    child.setData(0, _PATH_ROLE, str(project.folder / "script" / fragment.file))
+                    item.addChild(child)
+                self.blocks_tree.addTopLevelItem(item)
+        self.blocks_tree.expandAll()
+        self.blocks_tree.model().blockSignals(False)
+        self.blocks_tree.blockSignals(False)
 
     def _fill_budget(self, result) -> None:
         self.budget_tree.clear()
@@ -261,6 +304,37 @@ class ScriptsPanel(QWidget):
             self.fusion_tree.addTopLevelItem(QTreeWidgetItem(["nothing to fuse"]))
 
     # -- signals -----------------------------------------------------------------------------------------
+
+    def block_names(self) -> list[str]:
+        """The blocks as the tree lists them now, in order."""
+        return [self.blocks_tree.topLevelItem(i).data(0, _NAME_ROLE) for i in range(self.blocks_tree.topLevelItemCount())]
+
+    def _on_blocks_moved(self, *_args) -> None:
+        self.blocks_reordered.emit(self.block_names())
+
+    def _on_module_checked(self, item: QTreeWidgetItem, _column: int) -> None:
+        name = item.data(0, _NAME_ROLE)
+        if name:
+            self.module_toggled.emit(name, item.checkState(0) == Qt.CheckState.Checked)
+
+    def fragment_menu(self, item: QTreeWidgetItem) -> QMenu | None:
+        """The menu for a fragment row: "Move to" and every block but the one it is in. ``None`` for any other row."""
+        fragment = item.data(0, _FRAGMENT_ROLE) if item is not None else None
+        if not fragment:
+            return None
+        menu = QMenu(self)
+        move = menu.addMenu("Move to")
+        current = item.parent().data(0, _NAME_ROLE)
+        for name in self.block_names():
+            action = move.addAction(name)
+            action.setEnabled(name != current)
+            action.triggered.connect(lambda _checked=False, block=name: self.fragment_move_requested.emit(fragment, block))
+        return menu
+
+    def _on_blocks_menu(self, position) -> None:
+        menu = self.fragment_menu(self.blocks_tree.itemAt(position))
+        if menu is not None:
+            menu.exec(self.blocks_tree.viewport().mapToGlobal(position))
 
     def _on_profile_activated(self, index: int) -> None:
         text = self.profile_combo.itemText(index)

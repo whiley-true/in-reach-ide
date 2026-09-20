@@ -1,4 +1,4 @@
-"""Tests for :mod:`in_reach.ide.maps_panel` (PROMPT.md: "under maps section, please add url slugs for
+"""Tests for :mod:`in_reach_ide.maps_panel` (PROMPT.md: "under maps section, please add url slugs for
 Map Variants, Hopper Variants and User Maps, please also add a button for In-Reach maps (which should
 be added to settings and quick launch built-in buttons) ... it should point to .in-reach maps")."""
 
@@ -10,9 +10,9 @@ import pytest
 from PyQt6.QtWidgets import QMessageBox
 
 from in_reach.app import env_file, system_verify
-from in_reach.ide.explorer import ExplorerPanel
-from in_reach.ide.main_window import MainWindow
-from in_reach.ide.maps_panel import SLUGS, MapsPanel
+from in_reach_ide.explorer import ExplorerPanel
+from in_reach_ide.main_window import MainWindow
+from in_reach_ide.maps_panel import SLUGS, MapsPanel
 
 
 @pytest.fixture

@@ -1,0 +1,97 @@
+name: Cut Release
+
+on:
+  workflow_dispatch:
+    inputs:
+      bump:
+        description: "Version part to bump"
+        required: true
+        type: choice
+        options: [major, minor, patch]
+
+jobs:
+  cut-release:
+    if: github.ref == 'refs/heads/development'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      pull-requests: write
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: development
+          fetch-depth: 0
+          token: ${{ secrets.RELEASE_PAT }}
+
+      - name: Compute next version
+        id: version
+        run: |
+          BASE_TAG=$(git tag --list 'v*' --sort=-v:refname | head -n1)
+          PYPROJECT_VERSION=$(grep -m1 '^version' pyproject.toml | sed -E 's/version = "(.*)"/\1/')
+          if [ -z "$BASE_TAG" ]; then
+            # No release has ever been tagged: ship pyproject.toml's current version as-is
+            # (the "bump" input doesn't apply -- there's nothing to bump from yet).
+            NEXT="$PYPROJECT_VERSION"
+            echo "No existing tags -- shipping pyproject.toml's current version as the first release: $NEXT"
+          else
+            BASE="${BASE_TAG#v}"
+            IFS='.' read -r MAJOR MINOR PATCH <<< "$BASE"
+            case "${{ inputs.bump }}" in
+              major) MAJOR=$((MAJOR + 1)); MINOR=0; PATCH=0 ;;
+              minor) MINOR=$((MINOR + 1)); PATCH=0 ;;
+              patch) PATCH=$((PATCH + 1)) ;;
+            esac
+            NEXT="$MAJOR.$MINOR.$PATCH"
+            echo "Base: $BASE -> Next: $NEXT"
+          fi
+          echo "version=$NEXT" >> "$GITHUB_OUTPUT"
+
+      - name: Create release branch and bump version
+        run: |
+          VERSION="${{ steps.version.outputs.version }}"
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git checkout -b "release/v$VERSION"
+
+          python -m pip install --upgrade tomlkit
+          python - "$VERSION" <<'PYEOF'
+          import pathlib
+          import re
+          import sys
+
+          import tomlkit
+
+          version = sys.argv[1]
+
+          pyproject_path = pathlib.Path("pyproject.toml")
+          doc = tomlkit.parse(pyproject_path.read_text(encoding="utf-8"))
+          doc["project"]["version"] = version
+          pyproject_path.write_text(tomlkit.dumps(doc), encoding="utf-8")
+
+          init_path = pathlib.Path("src/in_reach_ide/__init__.py")
+          text = init_path.read_text(encoding="utf-8")
+          text, count = re.subn(r'__version__ = ".*"', f'__version__ = "{version}"', text)
+          if count == 0:
+              raise ValueError(f"__version__ assignment not found in {init_path}")
+          init_path.write_text(text, encoding="utf-8")
+          PYEOF
+
+          git add pyproject.toml src/in_reach_ide/__init__.py
+          if git diff --cached --quiet; then
+            echo "pyproject.toml/__init__.py already at $VERSION -- nothing to bump."
+          else
+            git commit -m "chore: bump version to $VERSION"
+          fi
+          git push origin "release/v$VERSION"
+
+      - name: Open PR into main
+        env:
+          GH_TOKEN: ${{ secrets.RELEASE_PAT }}
+        run: |
+          VERSION="${{ steps.version.outputs.version }}"
+          gh pr create \
+            --base main \
+            --head "release/v$VERSION" \
+            --title "Release v$VERSION" \
+            --body "Automated release branch cut from development." \
+            --label "bump:${{ inputs.bump }}"

@@ -9,7 +9,7 @@ from pathlib import Path
 import pytest
 from PyQt6.QtCore import Qt
 
-from in_reach.ide.search_panel import SearchPanel
+from in_reach_ide.search_panel import SearchPanel
 
 
 @pytest.fixture

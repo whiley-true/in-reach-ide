@@ -1,0 +1,25 @@
+# Python
+.venv/
+__pycache__/
+*.pyc
+*.egg-info/
+.pytest_cache/
+
+# Environment
+.env
+/.in-reach/
+
+# Local/ephemeral Claude Code state (the rules, skills and CLAUDE.md are checked in)
+.claude/scheduled_tasks.lock
+.claude/settings.local.json
+CLAUDE.local.md
+
+# Editors
+.vscode/
+
+# Build output
+/build/
+/dist/
+
+# Windows crash dumps
+*.dmp

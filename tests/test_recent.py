@@ -2,7 +2,8 @@ from pathlib import Path
 
 import pytest
 
-from in_reach.app import env_file, recent
+from in_reach.app import env_file
+from in_reach_ide import recent
 
 
 @pytest.fixture

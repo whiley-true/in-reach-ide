@@ -5,9 +5,9 @@ from PyQt6.QtCore import Qt
 from PyQt6.QtWidgets import QApplication
 
 from in_reach.app import env_file
-from in_reach.ide import theme as theme_module
-from in_reach.ide.main_window import MainWindow
-from in_reach.ide.quick_access import Command, QuickAccessBar, QuickAccessOverlay
+from in_reach_ide import theme as theme_module
+from in_reach_ide.main_window import MainWindow
+from in_reach_ide.quick_access import Command, QuickAccessBar, QuickAccessOverlay
 
 
 @pytest.fixture
@@ -40,7 +40,7 @@ def _project(tmp_path: Path) -> Path:
 
 def test_open_search_lists_every_project_file(overlay: QuickAccessOverlay, tmp_path: Path) -> None:
     project = _project(tmp_path)
-    from in_reach.app import quick_open
+    from in_reach_ide import quick_open
 
     files = quick_open.list_project_files(project)
 
@@ -52,7 +52,7 @@ def test_open_search_lists_every_project_file(overlay: QuickAccessOverlay, tmp_p
 
 def test_search_filters_as_the_query_changes(overlay: QuickAccessOverlay, tmp_path: Path) -> None:
     project = _project(tmp_path)
-    from in_reach.app import quick_open
+    from in_reach_ide import quick_open
 
     overlay.open_search(project, quick_open.list_project_files(project), lambda p: None)
 
@@ -64,7 +64,7 @@ def test_search_filters_as_the_query_changes(overlay: QuickAccessOverlay, tmp_pa
 
 def test_enter_on_a_search_result_opens_the_file(overlay: QuickAccessOverlay, tmp_path: Path) -> None:
     project = _project(tmp_path)
-    from in_reach.app import quick_open
+    from in_reach_ide import quick_open
 
     opened = []
     overlay.open_search(project, quick_open.list_project_files(project), opened.append)
@@ -426,6 +426,8 @@ def test_build_command_palette_commands_offers_set_theme_and_set_ui_scale(projec
         "Link Script Project",
         "Create Script Project",
         "New Script Module",
+        "Enable Script Module",
+        "Disable Script Module",
         "Launch Halo MCC",
         "Launch RVT",
         "New Kanban Board",
@@ -447,6 +449,7 @@ def test_build_command_palette_commands_offers_set_theme_and_set_ui_scale(projec
         "Compare",
         "Export RVT File",
         "View Output.txt",
+        "View Decompiled",
     ]
     theme_command = next(c for c in commands if c.label == "Set Theme")
     assert [c.label for c in theme_command.children] == ["Light", "Dark", "Whiley"]
@@ -470,7 +473,7 @@ def test_running_a_set_theme_command_applies_and_persists_the_theme(project_wind
 
 
 def test_running_a_set_ui_scale_command_zooms(project_window: MainWindow) -> None:
-    from in_reach.ide import zoom as zoom_module
+    from in_reach_ide import zoom as zoom_module
 
     commands = project_window.build_command_palette_commands()
     scale_command = next(c for c in commands if c.label == "Set UI Scale")
@@ -489,7 +492,7 @@ def test_open_quick_access_file_opens_it_into_the_active_pane(project_window: Ma
 
     project_window.open_quick_access_file(path)
 
-    from in_reach.ide.editor import TextEditorWidget
+    from in_reach_ide.editor import TextEditorWidget
 
     widget = project_window.main_panel.active_pane.currentWidget()
     assert isinstance(widget, TextEditorWidget)

@@ -2,7 +2,7 @@
 sidebar/panel toggles, window controls), a fixed activity bar, a toggleable primary sidebar, a
 split-capable main panel above a toggleable bottom panel, and a bottom status bar. Since the window
 is frameless, edge/corner dragging (to resize) and the maximize/restore button are both
-hand-implemented here rather than provided by the OS chrome -- see ``in_reach.ide.window_resize``/
+hand-implemented here rather than provided by the OS chrome -- see ``in_reach_ide.window_resize``/
 ``toggle_maximize()``.
 """
 
@@ -35,44 +35,33 @@ from PyQt6.QtWidgets import (
     QWidget,
 )
 
-from in_reach.app import (
-    env_file,
-    halo_status,
-    indent_settings,
-    logging_setup,
-    mcc_launcher,
-    new_project,
-    project,
-    recent,
-    rvt_launcher,
-    script_sync,
-    system_verify,
-)
-from in_reach.app.kanban_db import KanbanStore
-from in_reach.ide import file_dialogs, icons, style
-from in_reach.ide import indent_state
-from in_reach.ide import theme as theme_module
-from in_reach.ide import zoom as zoom_module
-from in_reach.ide.activity_bar import DEFAULT_VIEW, ActivityBar
-from in_reach.ide.bottom_panel import BottomPanel
-from in_reach.ide.documentation_panel import DocumentationPanel
-from in_reach.ide.editor import TextEditorWidget
-from in_reach.ide.explorer import ExplorerPanel
-from in_reach.ide.git_panel import GitPanel
-from in_reach.ide.kanban_panel import KanbanPanel
-from in_reach.ide.llm_panel import LlmPanel
-from in_reach.ide import maps_panel as maps_panel_module
-from in_reach.ide.maps_panel import MapsPanel
-from in_reach.ide.playtest_panel import PlaytestPanel
-from in_reach.ide.quick_access import Command, QuickAccessBar
-from in_reach.ide.scripts_panel import ScriptsPanel
-from in_reach.ide.search_panel import SearchPanel
-from in_reach.ide.settings_dialog import SettingsDialog
-from in_reach.ide.status_bar import StatusBar
-from in_reach.ide.tabs import MainPanelArea
-from in_reach.ide.testing_panel import TestingPanel
-from in_reach.ide.theme import Theme
-from in_reach.ide.window_resize import cursor_for_edges, resize_edges
+from in_reach.app import env_file, halo_status, logging_setup, mcc_launcher, new_project, project, rvt_launcher, script_sync, system_verify
+from in_reach_ide import indent_settings, recent
+from in_reach_ide.kanban_db import KanbanStore
+from in_reach_ide import file_dialogs, icons, style
+from in_reach_ide import indent_state
+from in_reach_ide import theme as theme_module
+from in_reach_ide import zoom as zoom_module
+from in_reach_ide.activity_bar import DEFAULT_VIEW, ActivityBar
+from in_reach_ide.bottom_panel import BottomPanel
+from in_reach_ide.documentation_panel import DocumentationPanel
+from in_reach_ide.editor import TextEditorWidget
+from in_reach_ide.explorer import ExplorerPanel
+from in_reach_ide.git_panel import GitPanel
+from in_reach_ide.kanban_panel import KanbanPanel
+from in_reach_ide.llm_panel import LlmPanel
+from in_reach_ide import maps_panel as maps_panel_module
+from in_reach_ide.maps_panel import MapsPanel
+from in_reach_ide.playtest_panel import PlaytestPanel
+from in_reach_ide.quick_access import Command, QuickAccessBar
+from in_reach_ide.scripts_panel import ScriptsPanel
+from in_reach_ide.search_panel import SearchPanel
+from in_reach_ide.settings_dialog import SettingsDialog
+from in_reach_ide.status_bar import StatusBar
+from in_reach_ide.tabs import MainPanelArea
+from in_reach_ide.testing_panel import TestingPanel
+from in_reach_ide.theme import Theme
+from in_reach_ide.window_resize import cursor_for_edges, resize_edges
 
 _logger = logging_setup.get_logger(__name__)
 
@@ -446,7 +435,7 @@ class _TopBar(QWidget):
     """The custom title-bar row: a small mark and dropdown menus on the left, sidebar/panel
     toggles and window controls on the right. Dragging empty space moves the (frameless) window;
     double-clicking it toggles maximize, same as a native title bar. Dragging within
-    :data:`~in_reach.ide.window_resize.RESIZE_MARGIN` of the window's top edge (or its corners)
+    :data:`~in_reach_ide.window_resize.RESIZE_MARGIN` of the window's top edge (or its corners)
     resizes it instead, since the top bar covers the entire top edge and both top corners of the
     frameless window."""
 
@@ -589,7 +578,7 @@ class _ResizableBody(QWidget):
     entire client area -- so left/right edge-resize hover/press detection has to live here rather
     than on MainWindow itself; a MainWindow-level override would simply never fire. The bottom
     edge is deliberately not this widget's to claim: it sits above the status bar, not at the
-    window's true bottom, so :class:`~in_reach.ide.status_bar.StatusBar` handles that edge (and
+    window's true bottom, so :class:`~in_reach_ide.status_bar.StatusBar` handles that edge (and
     its own corners) itself instead."""
 
     def __init__(self, window: "MainWindow") -> None:
@@ -782,6 +771,7 @@ class MainWindow(QWidget):
         self.explorer_panel.file_activated.connect(self._on_explorer_file_activated)
         self.explorer_panel.export_requested.connect(self.export_rvt_file)
         self.explorer_panel.view_output_requested.connect(self.view_output_txt)
+        self.explorer_panel.view_decompiled_requested.connect(self.view_decompiled)
         self.explorer_panel.launch_rvt_requested.connect(self.launch_rvt)
         self.explorer_panel.open_builtin_folder_requested.connect(self._open_builtin_folder)
         self.explorer_panel.notepad_open_in_editor_requested.connect(self.open_notepad_in_editor)
@@ -803,6 +793,9 @@ class MainWindow(QWidget):
         self.scripts_panel.create_project_requested.connect(self.create_script_project)
         self.scripts_panel.new_module_requested.connect(self.new_script_module)
         self.scripts_panel.open_file_requested.connect(self._on_explorer_file_activated)
+        self.scripts_panel.module_toggled.connect(self.set_script_module_enabled)
+        self.scripts_panel.blocks_reordered.connect(self.set_script_block_order)
+        self.scripts_panel.fragment_move_requested.connect(self.move_script_fragment)
         self._main_splitter.setStretchFactor(0, 1)
         self._main_splitter.setStretchFactor(1, 0)
         self._main_splitter.setSizes([700, 200])
@@ -1082,7 +1075,7 @@ class MainWindow(QWidget):
         or falls back to the workspace's own directory name once no project is open (its original,
         pre-project-open text). Also called from :meth:`_sync_project_title`, since a rename changes
         the title half of that text without the active project (and so without
-        :attr:`~in_reach.ide.explorer.ExplorerPanel.active_project_changed`) actually changing."""
+        :attr:`~in_reach_ide.explorer.ExplorerPanel.active_project_changed`) actually changing."""
         if folder is None:
             self.quick_access.set_label(self.root_dir.name)
             return
@@ -1167,6 +1160,8 @@ class MainWindow(QWidget):
             Command(label="Link Script Project", action=self.link_script_project),
             Command(label="Create Script Project", action=self.create_script_project),
             Command(label="New Script Module", action=self.new_script_module),
+            Command(label="Enable Script Module", children=self._script_module_toggle_commands(True)),
+            Command(label="Disable Script Module", children=self._script_module_toggle_commands(False)),
             Command(label="Launch Halo MCC", action=self.launch_mcc_from_menu, detail=_SHORTCUT_LAUNCH_MCC),
             Command(label="Launch RVT", action=self.launch_rvt_from_menu, detail=_SHORTCUT_LAUNCH_RVT),
             Command(label="New Kanban Board", action=self.new_kanban_board),
@@ -1243,6 +1238,7 @@ class MainWindow(QWidget):
             ),
             Command(label="Export RVT File", action=self.export_rvt_file),
             Command(label="View Output.txt", action=self.view_output_txt),
+            Command(label="View Decompiled", action=self.view_decompiled),
         ]
 
     def _vcs_branches(self) -> list[str]:
@@ -1393,7 +1389,7 @@ class MainWindow(QWidget):
     def _detect_active_indentation(self) -> None:
         """"Detect Indentation from Content" -- replaces the old manual "Indent using spaces"/
         "Indent using tabs" commands (PROMPT.md) with VSCode's own auto-detected equivalent (see
-        :func:`~in_reach.app.indent_settings.detect_indent`), persisted/applied the same way a
+        :func:`~in_reach_ide.indent_settings.detect_indent`), persisted/applied the same way a
         manual style pick used to be."""
         editor = self._active_text_editor()
         if editor is None:
@@ -1424,7 +1420,7 @@ class MainWindow(QWidget):
 
     def _rewrite_active_lines(self, editor: TextEditorWidget, transform: Callable[[str], str]) -> None:
         """Applies a whole-text-in, whole-text-out ``transform`` (one of
-        :mod:`in_reach.app.indent_settings`'s own rewrites) to just the current selection's own
+        :mod:`in_reach_ide.indent_settings`'s own rewrites) to just the current selection's own
         full lines if there is one, otherwise to the entire document -- PROMPT.md: "indent using
         tabs or spaces should apply to selection". Edits through a single ``QTextCursor`` scoped to
         only the affected character range (rather than ``selectAll()`` + ``insertPlainText()``),
@@ -1494,7 +1490,7 @@ class MainWindow(QWidget):
     def open_settings_dialog(self) -> None:
         """The activity bar's settings cog -- opens the Settings popout (System/UI stubbed, Theme
         live) centered at half the screen's size (see
-        :class:`~in_reach.ide.settings_dialog.SettingsDialog`'s own ``showEvent``)."""
+        :class:`~in_reach_ide.settings_dialog.SettingsDialog`'s own ``showEvent``)."""
         dialog = SettingsDialog(self, on_theme_changed=self.on_theme_applied)
         dialog.exec()
 
@@ -1527,14 +1523,14 @@ class MainWindow(QWidget):
 
     def close_all_tabs(self) -> None:
         """"Close All" -- the command palette's own entry for the tab context menu's identically
-        named action (see :meth:`~in_reach.ide.tabs.TabPane.close_all_tabs`), acting on the active
+        named action (see :meth:`~in_reach_ide.tabs.TabPane.close_all_tabs`), acting on the active
         pane since there's no specific right-clicked tab to infer it from here."""
         self.main_panel.active_pane.close_all_tabs()
 
     def split_active_tab_right(self) -> None:
         """"Split Right" (Ctrl+\\, matching VSCode's own default "Split Editor") -- splits the
         active pane's own current tab (see
-        :meth:`~in_reach.ide.tabs.TabPane.split_active_tab_right`)."""
+        :meth:`~in_reach_ide.tabs.TabPane.split_active_tab_right`)."""
         self.main_panel.active_pane.split_active_tab_right()
 
     def split_active_tab_down(self) -> None:
@@ -1571,7 +1567,7 @@ class MainWindow(QWidget):
     def edit_find(self) -> None:
         """PROMPT.md: "add an option for Find with shortcut CTRL + F ... it should show a find and
         replace bar (cursored on find or replace depending on selection)" -- opens the active tab's
-        own Find/Replace bar (see :meth:`~in_reach.ide.editor.TextEditorWidget.open_find`) focused
+        own Find/Replace bar (see :meth:`~in_reach_ide.editor.TextEditorWidget.open_find`) focused
         on the Find field."""
         editor = self._active_text_editor()
         if editor is not None:
@@ -1608,7 +1604,7 @@ class MainWindow(QWidget):
 
     def view_logs(self) -> None:
         """"View Logs" (the View menu, PROMPT.md) -- opens the bottom panel onto its live Logs tab
-        (see :mod:`in_reach.ide.logs_panel`), showing the panel first if it was collapsed (same
+        (see :mod:`in_reach_ide.logs_panel`), showing the panel first if it was collapsed (same
         toggle the top bar's own panel_toggle button drives)."""
         self.top_bar.panel_toggle.setChecked(True)
         self.bottom_panel.show_logs()
@@ -1639,7 +1635,7 @@ class MainWindow(QWidget):
 
         ``color`` defaults to the current theme's window-text color, read back from the live
         QPalette. Must be called again after a live theme switch (the first-run dialog's own theme
-        buttons) or a zoom change, since :func:`in_reach.ide.icons.icon` bakes a fixed color and
+        buttons) or a zoom change, since :func:`in_reach_ide.icons.icon` bakes a fixed color and
         size into the pixmap rather than tracking either live. Prefer :meth:`on_theme_applied`
         (which passes ``color`` explicitly) over relying on the palette read-back for that case --
         ``QApplication.setPalette()`` only actually updates this widget's own ``self.palette()``
@@ -1663,7 +1659,7 @@ class MainWindow(QWidget):
         """Refreshes every bit of chrome that a live theme switch doesn't drive automatically via
         QPalette alone: the top bar's icon colors and the status bar's accent color.
 
-        Also persists the choice -- same shared-``.env`` mechanism as :mod:`in_reach.ide.zoom`'s
+        Also persists the choice -- same shared-``.env`` mechanism as :mod:`in_reach_ide.zoom`'s
         own ``UI_ZOOM`` -- so it survives a relaunch. Every live theme switch in the app (the
         Settings dialog's Theme tab, the first-run dialog, and the Quick Access Bar's "Set Theme"
         command) already funnels through here, so this is the one place that needs to do it.
@@ -1684,7 +1680,7 @@ class MainWindow(QWidget):
         """Nudges the saved zoom level by ``delta``, applies it app-wide, and persists the result.
 
         Re-reads the current level from the ``.env`` on every call rather than caching it on
-        ``self`` -- it's the same file :meth:`in_reach.ide.welcome.WelcomeTab.refresh` and every
+        ``self`` -- it's the same file :meth:`in_reach_ide.welcome.WelcomeTab.refresh` and every
         other zoom-aware piece of the IDE would read, so there's only ever the one source of truth.
         """
         env_path = project.get_project_dir(self.root_dir) / ".env"
@@ -2344,7 +2340,7 @@ class MainWindow(QWidget):
 
     def _ask_commit_message(self) -> str:
         """Kept as its own method purely as a test seam, same reasoning as
-        :meth:`~in_reach.ide.git_panel.GitPanel._ask_text`."""
+        :meth:`~in_reach_ide.git_panel.GitPanel._ask_text`."""
         from PyQt6.QtWidgets import QInputDialog
 
         text, ok = QInputDialog.getText(self, "Commit", "Commit message:")
@@ -2449,14 +2445,14 @@ class MainWindow(QWidget):
     def vcs_compare(self, ref_a: str, ref_b: str) -> None:
         """"Compare" (the Git panel's own combos, PROMPT.md: "they should be able to view branch
         differences[; and] compare different stamped versions") -- opens a
-        :class:`~in_reach.ide.diff_dialog.DiffDialog` listing every file that differs between
+        :class:`~in_reach_ide.diff_dialog.DiffDialog` listing every file that differs between
         ``ref_a`` and ``ref_b`` (each a branch name or a stamp's sha). A no-op with no project
         open."""
         folder = self.explorer_panel.current_folder
         if folder is None:
             return
         from in_reach.app import vcs
-        from in_reach.ide.diff_dialog import DiffDialog
+        from in_reach_ide.diff_dialog import DiffDialog
 
         try:
             diffs = vcs.diff(folder, ref_a, ref_b)
@@ -2471,7 +2467,7 @@ class MainWindow(QWidget):
         """A file clicked in the Git panel's own "Changes" list -- PROMPT.md: "when clicking on
         changes to a file (in the changes tab) a tab should appear showing the original on the
         left and highlighted changes on the right (like vscode git)". Opens (or refreshes/switches
-        to, if already open) a :class:`~in_reach.ide.diff_view.DiffViewWidget` tab for ``rel_path``'s
+        to, if already open) a :class:`~in_reach_ide.diff_view.DiffViewWidget` tab for ``rel_path``'s
         own uncommitted change, in the currently active pane. A no-op with no project open."""
         folder = self.explorer_panel.current_folder
         if folder is None:
@@ -2546,7 +2542,7 @@ class MainWindow(QWidget):
 
     def vcs_reveal_in_explorer(self, rel_path: str) -> None:
         """"Reveal in File Explorer" (the Git panel's own Changes context menu) -- same OS
-        file-explorer reveal as :meth:`~in_reach.ide.tabs.TabPane._reveal_in_os_explorer`. A no-op
+        file-explorer reveal as :meth:`~in_reach_ide.tabs.TabPane._reveal_in_os_explorer`. A no-op
         with no project open."""
         folder = self.explorer_panel.current_folder
         if folder is None:
@@ -2682,7 +2678,7 @@ class MainWindow(QWidget):
         :func:`~in_reach.app.rvt.compile.run_compile`'s own docstring) and is surfaced here as a
         critical message box listing every compiler error/warning/notice, same presentation as
         this window's other blocking failures (e.g. a schema-invalid save, see
-        :meth:`~in_reach.ide.tabs.TabPane._save_tab`).
+        :meth:`~in_reach_ide.tabs.TabPane._save_tab`).
 
         Disables the button itself the instant it's clicked, before the (blocking) compile even
         starts -- PROMPT.md: "we are having to press compile twice" -- see :meth:`_run_compile`'s
@@ -2712,6 +2708,24 @@ class MainWindow(QWidget):
         # regenerated build/stats.autogenerated.json too; the Dashboard's own Stats box only reads
         # it on project-switch otherwise, so it'd stay stale until the user clicked away and back.
         self.explorer_panel.refresh_stats()
+
+    def view_decompiled(self) -> None:
+        """"View Decompiled" (the Dashboard's button, and the command palette) -- opens a read-only view of the active
+        project's *built* script as ReachVariantTool shows it (``build/Decompiled.txt``: no modules, no profile), so what
+        was built can be compared with what was written and with "View Compiled". Says so if nothing has been built
+        yet. A no-op with no project open."""
+        folder = self.explorer_panel.current_folder
+        if folder is None:
+            return
+        from in_reach import api
+
+        try:
+            shown = api.show(folder, "rvt")
+        except api.ApiError as exc:
+            QMessageBox.information(self, "in-reach", str(exc))
+            return
+        _logger.info("viewing decompiled output for %s", folder)
+        self.main_panel.active_pane.open_file(Path(shown.path), force_reload=True)
 
     def view_output_txt(self) -> None:
         """"View Output.txt" (PROMPT.md, under the Dashboard's own button row) -- opens a
@@ -2794,9 +2808,9 @@ class MainWindow(QWidget):
         """Re-checks ``folder``'s script project (if it is one -- see :mod:`in_reach.app.script_project`) and updates
         what shows the result: the bottom panel's Problems tab and the Scripts view. Nothing is written. A project that
         is a single script (or no project) empties the Problems tab and shows the Scripts view's own explanation."""
-        from in_reach.app import script_preprocess
-        from in_reach.app.script_project import is_linked, link, read_link_map
-        from in_reach.ide.problems_panel import problems_from_diagnostics
+        from in_reach import api
+        from in_reach.app.script_project import is_linked
+        from in_reach_ide.problems_panel import problems_from_diagnostics
 
         bottom = getattr(self, "bottom_panel", None)  # a project can open while the window is still being built
         if bottom is None:
@@ -2809,13 +2823,54 @@ class MainWindow(QWidget):
             bottom.problems_panel.clear()
             self.scripts_panel.show_unlinked(folder)
             return
-        result = link(folder, write=False)
-        if not result.ok:
-            result.link_map = read_link_map(folder)  # a broken project still shows what it last built
-        bottom.problems_panel.set_problems(problems_from_diagnostics(folder, result.diagnostics))
-        self.scripts_panel.show_link(
-            folder, result, script_preprocess.list_profiles(folder), script_preprocess.active_profile_name(folder)
-        )
+        checked = api.check(folder)  # a broken project still carries what it last built
+        profiles = api.profiles(folder)
+        bottom.problems_panel.set_problems(problems_from_diagnostics(folder, checked.diagnostics))
+        self.scripts_panel.show_link(folder, checked.link_result, profiles.names, profiles.active)
+
+    def _compose(self, action) -> None:
+        """Runs an edit of the script project's composition (``action`` calls one of the ``in_reach.api`` edit functions), then
+        refreshes everything that shows it. A refused edit is reported, and the views are refreshed anyway so a checkbox or
+        a dragged row snaps back to what the project really says."""
+        folder = self.explorer_panel.current_folder
+        if folder is None:
+            return
+        from in_reach import api
+
+        try:
+            action(api, folder)
+        except (api.ApiError, OSError) as exc:
+            QMessageBox.warning(self, "in-reach", str(exc))
+        self._refresh_script_views(folder)
+        self._refresh_apply_enabled(folder)
+
+    def set_script_module_enabled(self, name: str, enabled: bool) -> None:
+        """Builds (or stops building) module ``name`` -- the Scripts view's checkbox, and "Enable/Disable Script Module"."""
+        _logger.info("%s script module %s", "enabling" if enabled else "disabling", name)
+        self._compose(lambda api, folder: api.set_module_enabled(folder, name, enabled))
+
+    def set_script_block_order(self, order: list) -> None:
+        """Builds the blocks in ``order`` -- the Scripts view's drag to reorder."""
+        _logger.info("script block order set to %s", order)
+        self._compose(lambda api, folder: api.set_block_order(folder, list(order)))
+
+    def move_script_fragment(self, fragment_id: str, block: str) -> None:
+        """Moves a fragment into another block -- the Scripts view's "Move to" on a fragment."""
+        _logger.info("moving fragment %s to %s", fragment_id, block)
+        self._compose(lambda api, folder: api.move_fragment(folder, fragment_id, block))
+
+    def _script_module_toggle_commands(self, enable: bool) -> list[Command]:
+        """The palette's "Enable/Disable Script Module" picks: the modules currently off (to enable) or on (to disable)."""
+        folder = self.explorer_panel.current_folder
+        if folder is None:
+            return []
+        from in_reach.app.script_project import is_linked, load_project
+
+        if not is_linked(folder):
+            return []
+        project = load_project(folder)
+        names = project.disabled_modules if enable else [m.name for m in project.modules]
+        return [Command(label=name, action=lambda n=name: self.set_script_module_enabled(n, enable)) for name in names]
 
     def view_problems(self) -> None:
         """"View Problems" -- opens the bottom panel onto its Problems tab, showing the panel first if it was collapsed."""
@@ -2833,7 +2888,7 @@ class MainWindow(QWidget):
         """Shows an Apply's compiler messages on the Problems tab. A failed build replaces what was there and brings the
         tab forward; a successful one only adds the warnings the project's own check didn't already list."""
         from in_reach.app.script_project import is_linked
-        from in_reach.ide.problems_panel import problems_from_build
+        from in_reach_ide.problems_panel import problems_from_build
 
         panel = self.bottom_panel.problems_panel
         linked = is_linked(folder)
@@ -2877,12 +2932,13 @@ class MainWindow(QWidget):
         folder = self.explorer_panel.current_folder
         if folder is None:
             return
-        from in_reach.app.script_project import is_linked, link
+        from in_reach import api
+        from in_reach.app.script_project import is_linked
 
         if not is_linked(folder):
             self.check_script_project()  # says why there is nothing to link
             return
-        result = link(folder, write=True)
+        result = api.link(folder, write=True)
         _logger.info(
             "linked %s: %s (%d file(s) written)", folder, "ok" if result.ok else "failed", len(result.written)
         )
@@ -2898,6 +2954,7 @@ class MainWindow(QWidget):
         folder = self.explorer_panel.current_folder
         if folder is None:
             return
+        from in_reach import api
         from in_reach.app import script_project
 
         if script_project.is_linked(folder):
@@ -2906,14 +2963,14 @@ class MainWindow(QWidget):
         if not self._confirm_create_script_project():
             return
         try:
-            written = script_project.create_project(folder)
-        except (ValueError, OSError) as exc:
+            written = api.create_script_project(folder)
+        except (api.ApiError, OSError) as exc:
             QMessageBox.critical(self, "in-reach", f"Couldn't create a script project:\n{exc}")
             return
         _logger.info("created a script project for %s", folder)
         self._refresh_script_views(folder)
         self._refresh_apply_enabled(folder)
-        self.main_panel.active_pane.open_file(written[-1])
+        self.main_panel.active_pane.open_file(folder / written[-1])
 
     def _confirm_create_script_project(self) -> bool:
         """Kept as its own method purely as a test seam, same convention as :meth:`_confirm_overwrite_rvt_changes`."""
@@ -2932,6 +2989,7 @@ class MainWindow(QWidget):
         folder = self.explorer_panel.current_folder
         if folder is None:
             return
+        from in_reach import api
         from in_reach.app import script_project
 
         if not script_project.is_linked(folder):
@@ -2941,13 +2999,13 @@ class MainWindow(QWidget):
         if not name:
             return
         try:
-            written = script_project.create_module(folder, name)
-        except (ValueError, OSError) as exc:
+            written = api.new_script_module(folder, name)
+        except (api.ApiError, OSError) as exc:
             QMessageBox.critical(self, "in-reach", f"Couldn't create the module:\n{exc}")
             return
         _logger.info("created module %s in %s", name, folder)
         self._refresh_script_views(folder)
-        self.main_panel.active_pane.open_file(written[1])
+        self.main_panel.active_pane.open_file(folder / written[1])
 
     def _ask_module_name(self) -> str:
         """The new module's name, or ``""`` if cancelled. A test seam, like :meth:`_confirm_create_script_project`."""
@@ -2959,7 +3017,7 @@ class MainWindow(QWidget):
     # -- Kanban (PROMPT.md: "the first pass of Kanban functionality") -----------------------------
 
     def _kanban_store(self) -> KanbanStore:
-        """The one shared :class:`~in_reach.app.kanban_db.KanbanStore` for this window -- one
+        """The one shared :class:`~in_reach_ide.kanban_db.KanbanStore` for this window -- one
         database in the project-root ``.in-reach`` folder serving every gametype project -- created
         on first use, and handed to the sidebar panel (which keeps itself in sync with it)."""
         if self._kanban_store_obj is None:
@@ -3122,11 +3180,11 @@ class MainWindow(QWidget):
         _logger.info("exported %s to %s", folder, dest)
 
     def _open_builtin_folder(self, env_key: str) -> None:
-        """Handles :attr:`~in_reach.ide.explorer.ExplorerPanel.open_builtin_folder_requested` --
+        """Handles :attr:`~in_reach_ide.explorer.ExplorerPanel.open_builtin_folder_requested` --
         PROMPT.md's Dashboard "Quick Launch" "Built-in"/"Hot Reload" buttons. Resolves ``env_key``
         (one of :mod:`in_reach.app.system_verify`'s own checklist keys, e.g. ``STANDARD_VARIANTS_
         KEY``) against this window's own project-root ``.env`` -- the same one the Welcome tab's
-        Verify System Settings flow itself writes to (:class:`~in_reach.ide.verify_dialog.
+        Verify System Settings flow itself writes to (:class:`~in_reach_ide.verify_dialog.
         VerifyDialog`) -- rather than the active gametype project's own folder, since these are
         install-wide locations (Steam's own game/map variant folders, MCC's hot-reload folder), not
         anything scoped to a single project.
@@ -3224,7 +3282,7 @@ class MainWindow(QWidget):
         so choosing "Abort" leaves ``settings/`` (and every open tab) untouched by this cycle
         rather than trying to undo a write that's already landed on disk. "Overwrite" (or nothing
         dirty at all) proceeds with the resync as before, then reloads every matching open tab in
-        place via :meth:`~in_reach.ide.tabs.MainPanelArea.reload_open_tabs`.
+        place via :meth:`~in_reach_ide.tabs.MainPanelArea.reload_open_tabs`.
 
         Title/description are deliberately *not* carried forward from the old ``settings.json``
         here (unlike category, which isn't a ``.bin`` concept at all) -- PROMPT.md: "when a project
@@ -3331,7 +3389,7 @@ class MainWindow(QWidget):
     def _confirm_overwrite_rvt_changes(self, dirty_names: list[str]) -> bool:
         """Asks whether to let a just-saved RVT resync overwrite unsaved edits in ``dirty_names``
         (already-open settings/script_settings/strings.json tabs) -- kept as its own method purely
-        as a test seam, same reasoning as :meth:`~in_reach.ide.tabs.TabPane._ask_save_choice`.
+        as a test seam, same reasoning as :meth:`~in_reach_ide.tabs.TabPane._ask_save_choice`.
 
         Returns:
             ``True`` for "Overwrite" (the resync should proceed), ``False`` for "Abort".

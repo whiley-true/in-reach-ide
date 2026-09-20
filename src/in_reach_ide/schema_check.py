@@ -21,7 +21,7 @@ from pydantic import ValidationError
 from in_reach.app.rvt.models.game_settings import GameSettings
 from in_reach.app.rvt.models.script_settings import ScriptSettings
 from in_reach.app.rvt.models.strings import StringsDocument
-from in_reach.ide.json_position import find_value_span
+from in_reach_ide.json_position import find_value_span
 
 #: Filenames unique to settings/ across this app's whole project layout -- matching by basename
 #: alone is safe, nothing else in a project ever shares one of these exact names.
@@ -36,7 +36,7 @@ _MODELS_BY_FILENAME = {
 class SchemaError:
     """One validation problem, plus (when it names an actual value in the text, rather than e.g.
     a required field that's simply absent) the character span in the original ``text`` that value
-    came from -- what :mod:`in_reach.ide.editor`'s live-as-you-type check underlines."""
+    came from -- what :mod:`in_reach_ide.editor`'s live-as-you-type check underlines."""
 
     loc: tuple
     message: str

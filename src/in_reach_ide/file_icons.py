@@ -18,7 +18,7 @@ from PyQt6.QtCore import QRectF, Qt
 from PyQt6.QtGui import QColor, QIcon, QPainter, QPixmap
 from PyQt6.QtWidgets import QFileIconProvider
 
-from in_reach.ide import icons
+from in_reach_ide import icons
 
 _GENERIC_FILE_ICON_NAME = "new_file"
 _FOLDER_EMOJI_CLOSED = "\U0001F4C1"  # 📁

@@ -1,7 +1,7 @@
 """File-name search across a gametype project's own folder.
 
 Backs the Quick Access Bar's search mode (``Ctrl+P``, VSCode's own "Go to File" behavior) --
-matching against file *names*/paths, not file contents (see :mod:`in_reach.app.project_search` for
+matching against file *names*/paths, not file contents (see :mod:`in_reach_ide.project_search` for
 that). Same "no need for fuzzy scoring or a background thread" reasoning as
 ``project_search.py``'s own module docstring: a gametype project's own file count is small.
 """

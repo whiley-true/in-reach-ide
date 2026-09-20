@@ -1,7 +1,7 @@
 """Indent-style preference (spaces vs. tabs, and width) -- backs the bottom status bar's "Spaces:
 N" segment and its "Select Action" indentation commands (PROMPT.md: quick-access bar work).
 
-Persisted the same way :mod:`in_reach.ide.zoom` persists ``UI_ZOOM``: one shared pair of keys in
+Persisted the same way :mod:`in_reach_ide.zoom` persists ``UI_ZOOM``: one shared pair of keys in
 the project-root ``.in-reach/.env``, not per individual gametype project -- an IDE-wide editing
 preference, not something that should vary file to file.
 """

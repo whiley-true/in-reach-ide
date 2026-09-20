@@ -4,7 +4,7 @@ highlighted changes on the right (like vscode git)") -- the Git panel's own "Cha
 opens one (see ``MainWindow.vcs_open_diff``), one file at a time, always for that file's own
 uncommitted change (``HEAD`` on the left, the current on-disk content on the right; see
 :func:`~in_reach.app.vcs.uncommitted_file_diff`). The Compare window (see
-:mod:`in_reach.ide.diff_dialog`) reuses this same widget for two arbitrary refs, via
+:mod:`in_reach_ide.diff_dialog`) reuses this same widget for two arbitrary refs, via
 :func:`~in_reach.app.vcs.ref_file_diff`.
 
 Line-aligned (:func:`_align`), not just two independent scrollable texts: a block only present on
@@ -15,13 +15,13 @@ view - this should maintain the text colouring of the theme, and also have line 
 separate views and still have the text preview on the left") showing that side's *own* real line
 number (blank for an alignment filler row, which isn't a real line on that side at all), plus JSON
 syntax highlighting matching the app's live theme when the file being diffed is one (``"text
-colouring of the theme"`` -- the same :class:`~in_reach.ide.json_highlighter.JsonSyntaxHighlighter`
+colouring of the theme"`` -- the same :class:`~in_reach_ide.json_highlighter.JsonSyntaxHighlighter`
 an ordinary editor tab uses, not just plain monochrome text).
 
 PROMPT.md (a further pass): "in changes we also want to see the text preview on the right hand side
 of the editors - with highlighted lines at changes" -- each side also gets its own
 :class:`_DiffMinimap`, the same shrunk-text, scrolls-with-the-view preview
-:class:`~in_reach.ide.editor._Minimap` already gives an ordinary editor tab, just recolored: instead
+:class:`~in_reach_ide.editor._Minimap` already gives an ordinary editor tab, just recolored: instead
 of highlighting live schema-error lines, it highlights added/removed lines using this module's own
 :data:`_LINE_KIND_COLOR`, so a change is spottable in the preview at a glance even several pages
 away from the current scroll position.
@@ -46,7 +46,7 @@ from PyQt6.QtGui import (
 )
 from PyQt6.QtWidgets import QHBoxLayout, QLabel, QPlainTextEdit, QTextEdit, QVBoxLayout, QWidget
 
-from in_reach.ide.json_highlighter import JsonSyntaxHighlighter
+from in_reach_ide.json_highlighter import JsonSyntaxHighlighter
 
 #: Translucent so the theme's own editor background still shows through -- same "alpha over
 #: whatever's there" approach as editor.py's own _GOTO_LINE_HIGHLIGHT_ALPHA.
@@ -75,8 +75,8 @@ _MINIMAP_LINE_KIND_COLOR = {
 class _DiffMinimap(QWidget):
     """A shrunk, scrolling text preview pinned along a :class:`_DiffPane`'s own right edge -- see
     this module's own docstring. Deliberately not a subclass of editor.py's own
-    :class:`~in_reach.ide.editor._Minimap` (a diff pane is a plain ``QPlainTextEdit``, not a
-    :class:`~in_reach.ide.editor._PlainTextEditor`, and has no schema-error/fold-marker/"go to line"
+    :class:`~in_reach_ide.editor._Minimap` (a diff pane is a plain ``QPlainTextEdit``, not a
+    :class:`~in_reach_ide.editor._PlainTextEditor`, and has no schema-error/fold-marker/"go to line"
     concerns of its own to mirror) -- the same shape, applied to what a diff pane actually has:
     per-line change ``kind``\\ s instead of live error lines.
     """
@@ -239,7 +239,7 @@ def _align(
 
 class _DiffGutter(QWidget):
     """The line-number gutter itself -- just forwards sizing/painting back to the owning
-    :class:`_DiffPane`, same "Qt Code Editor Example" split as :mod:`in_reach.ide.editor`'s own
+    :class:`_DiffPane`, same "Qt Code Editor Example" split as :mod:`in_reach_ide.editor`'s own
     ``_LineNumberArea``/``_PlainTextEditor``."""
 
     def __init__(self, pane: "_DiffPane") -> None:
@@ -372,7 +372,7 @@ class _DiffPane(QPlainTextEdit):
 class DiffViewWidget(QWidget):
     """The tab's own content widget -- two :class:`_DiffPane`\\ s side by side, scrolling together.
     ``rel_path`` (the project-relative path this is a diff *of*) is what
-    :meth:`~in_reach.ide.tabs.TabPane.open_diff` matches an already-open diff tab against, so
+    :meth:`~in_reach_ide.tabs.TabPane.open_diff` matches an already-open diff tab against, so
     clicking the same changed file twice switches to the existing tab rather than opening a
     duplicate."""
 

@@ -2,7 +2,7 @@ from pathlib import Path
 
 import pytest
 
-from in_reach.ide.search_panel import SearchPanel
+from in_reach_ide.search_panel import SearchPanel
 
 
 @pytest.fixture
@@ -143,7 +143,7 @@ def test_ask_confirm_replace_passes_the_match_count_into_the_message(
 
         return QMessageBox.StandardButton.No
 
-    monkeypatch.setattr("in_reach.ide.search_panel.QMessageBox.question", fake_question)
+    monkeypatch.setattr("in_reach_ide.search_panel.QMessageBox.question", fake_question)
 
     panel.replace_all()
 

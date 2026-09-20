@@ -19,8 +19,8 @@ from PyQt6.QtWidgets import (
     QWidget,
 )
 
-from in_reach.ide.theme import Theme
-from in_reach.ide.theme_picker import ThemePickerRow
+from in_reach_ide.theme import Theme
+from in_reach_ide.theme_picker import ThemePickerRow
 
 _SYSTEM_PLACEHOLDER_TEXT = "System settings -- coming soon."
 _UI_PLACEHOLDER_TEXT = "UI settings -- coming soon."

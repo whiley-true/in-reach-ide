@@ -6,10 +6,10 @@ Match Whole Word/Use Regular Expression toggles docked inside its right edge; a 
 that reveals the replace row (a replacement box with a Preserve Case toggle, plus Replace All); and
 a "..." toggle that reveals "files to include" (whose own inline toggle is "Search only in Open
 Editors") and "files to exclude", each with placeholder text demonstrating the glob syntax
-:mod:`in_reach.app.project_search` accepts.
+:mod:`in_reach_ide.project_search` accepts.
 
 Search re-runs live as any of that changes -- a gametype project's own text files are few and small
-(see :mod:`in_reach.app.project_search`'s own docstring), so there's no need for a debounce timer
+(see :mod:`in_reach_ide.project_search`'s own docstring), so there's no need for a debounce timer
 or a background thread the way a search across a real codebase would need. "Replace All" is the one
 destructive action here, and it can touch every matched file at once, so it always confirms first
 (see :meth:`SearchPanel.ask_confirm_replace`) -- matching every other bulk/hard-to-reverse action
@@ -37,9 +37,9 @@ from PyQt6.QtWidgets import (
     QWidget,
 )
 
-from in_reach.app import project_search
-from in_reach.ide import icons
-from in_reach.ide.find_replace import toggle_button
+from in_reach_ide import project_search
+from in_reach_ide import icons
+from in_reach_ide.find_replace import toggle_button
 
 _NO_PROJECT_TEXT = "No project opened yet -- create or load one from the Welcome tab."
 _INVALID_REGEX_TEXT = "Invalid regular expression."
@@ -88,7 +88,7 @@ class SearchPanel(QWidget):
     file_activated = pyqtSignal(Path, int)
 
     #: "same for search relaces texts [make 10% smaller]" -- relative to the app's own current
-    #: zoom-scaled font, same mechanism as :attr:`~in_reach.ide.explorer.ExplorerPanel.TEXT_SCALE`
+    #: zoom-scaled font, same mechanism as :attr:`~in_reach_ide.explorer.ExplorerPanel.TEXT_SCALE`
     #: (see :meth:`refresh_font_scale`), just shrinking instead of growing.
     TEXT_SCALE = 0.9
 
@@ -204,7 +204,7 @@ class SearchPanel(QWidget):
     def refresh_font_scale(self) -> None:
         """(Re-)applies :data:`TEXT_SCALE` on top of the app's current font -- same mechanism (and
         same caveat: a one-time snapshot, not a live binding) as
-        :meth:`in_reach.ide.explorer.ExplorerPanel.refresh_font_scale`; call again after a zoom
+        :meth:`in_reach_ide.explorer.ExplorerPanel.refresh_font_scale`; call again after a zoom
         change."""
         app = QApplication.instance()
         if app is None:
@@ -246,7 +246,7 @@ class SearchPanel(QWidget):
     def set_project_folder(self, folder: Path | None) -> None:
         """Points this panel at ``folder`` (the current gametype project's own folder) -- or back
         to the "no project" state for ``None``, same as the Explorer panel's own
-        :meth:`~in_reach.ide.explorer.ExplorerPanel.set_project_folder`."""
+        :meth:`~in_reach_ide.explorer.ExplorerPanel.set_project_folder`."""
         self._project_folder = folder
         self._sync_enabled()
         self._run_search()

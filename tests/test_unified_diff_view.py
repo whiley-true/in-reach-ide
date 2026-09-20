@@ -1,4 +1,4 @@
-from in_reach.ide.unified_diff_view import UnifiedDiffViewWidget, UnifiedLine, unify
+from in_reach_ide.unified_diff_view import UnifiedDiffViewWidget, UnifiedLine, unify
 
 
 def test_identical_lines_are_all_equal_with_both_linenos() -> None:

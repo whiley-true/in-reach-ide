@@ -4,7 +4,7 @@ functionality").
 
 A thin view over :mod:`in_reach.app.vcs` -- this panel never calls that module directly. Every user
 action (commit, stamp a release, create a branch, switch branches) is emitted as a request signal
-instead, same convention as :class:`~in_reach.ide.activity_bar.ActivityBar`'s own
+instead, same convention as :class:`~in_reach_ide.activity_bar.ActivityBar`'s own
 ``launch_rvt_requested``/``apply_requested``. ``MainWindow`` is the integration point that actually
 calls :mod:`in_reach.app.vcs`, because switching branches can overwrite/delete real files on disk and
 needs to coordinate with whatever's currently open in the editor (reload clean tabs, warn about dirty
@@ -19,7 +19,7 @@ and stamps instead in vscode style" -- this panel now has a live "Changes" secti
 file list plus an inline commit-message box, see :attr:`commit_requested`) above the existing "Stamp
 Release" button (kept as a *separate* action from an ordinary commit -- a stamp still explicitly
 marks a release, not just "a commit with a message"), and the old flat history ``QListWidget`` is
-replaced by :class:`~in_reach.ide.git_graph.GitGraphWidget`, a real lane-painted commit graph across
+replaced by :class:`~in_reach_ide.git_graph.GitGraphWidget`, a real lane-painted commit graph across
 every branch at once.
 """
 
@@ -45,8 +45,8 @@ from PyQt6.QtWidgets import (
 )
 
 from in_reach.app import vcs
-from in_reach.ide.collapsible_section import CollapsibleSection
-from in_reach.ide.git_graph import GitGraphWidget
+from in_reach_ide.collapsible_section import CollapsibleSection
+from in_reach_ide.git_graph import GitGraphWidget
 
 _NO_HISTORY_TEXT = "This project has no history yet."
 _STAMP_LABEL_PREFIX = "Stamp: "
@@ -160,7 +160,7 @@ class GitPanel(QWidget):
 
         # PROMPT.md: "please add section headings to the vcs sub panel to make it clearer" -- same
         # VSCode-style collapsible-header treatment the Dashboard already uses (see
-        # in_reach.ide.collapsible_section, factored out of explorer.py for exactly this reuse).
+        # in_reach_ide.collapsible_section, factored out of explorer.py for exactly this reuse).
         # Cached snapshot/branch lists (see refresh()) so the Compare type combos below can
         # re-populate their own ref combo without needing a full refresh() every time.
         self._branches: list[str] = []
@@ -613,7 +613,7 @@ class GitPanel(QWidget):
         message, ``None`` otherwise -- kept as its own method purely as a test seam, same reasoning
         as :meth:`_ask_text`. ``message``, when given, pre-fills the release-message field (see
         :meth:`_on_stamp_clicked`'s own "back at their release dialog" re-open)."""
-        from in_reach.ide.stamp_release_dialog import StampReleaseDialog
+        from in_reach_ide.stamp_release_dialog import StampReleaseDialog
 
         dialog = StampReleaseDialog(major, minor, patch, self, message=message)
         if dialog.exec() != StampReleaseDialog.DialogCode.Accepted:

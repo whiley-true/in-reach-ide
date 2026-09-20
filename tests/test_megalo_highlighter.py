@@ -3,8 +3,8 @@ from pathlib import Path
 import pytest
 from PyQt6.QtGui import QColor, QTextDocument
 
-from in_reach.ide.editor import TextEditorWidget, is_megalo_path
-from in_reach.ide.megalo_highlighter import _DARK, _LIGHT, _NAMES, MegaloSyntaxHighlighter
+from in_reach_ide.editor import TextEditorWidget, is_megalo_path
+from in_reach_ide.megalo_highlighter import _DARK, _LIGHT, _NAMES, MegaloSyntaxHighlighter
 
 _COLORS = dict(zip(_NAMES, _LIGHT))
 

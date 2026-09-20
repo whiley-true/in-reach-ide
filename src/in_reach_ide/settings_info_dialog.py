@@ -1,6 +1,6 @@
 """The "What is this?" popout behind the Welcome tab's Verify System Settings quadrant.
 
-A plain explainer, not a control -- unlike :class:`~in_reach.ide.verify_dialog.VerifyDialog`, this
+A plain explainer, not a control -- unlike :class:`~in_reach_ide.verify_dialog.VerifyDialog`, this
 never reads or writes the ``.env``. It only exists because the checklist itself is asking for
 things (a Tesseract install, half a dozen folder paths, a Steam account) whose purpose isn't
 obvious from a bare label like "Halo Reach Hot Reload" -- this is where that gets explained.

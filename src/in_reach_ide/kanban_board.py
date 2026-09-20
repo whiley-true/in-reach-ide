@@ -2,7 +2,7 @@
 default board in the editor view ... the board should function like a simple Trello: add column,
 rename, delete; add card, title, description, label (edit, delete, make labels); mark as done").
 
-:class:`KanbanBoardView` renders one board from a :class:`~in_reach.app.kanban_db.KanbanStore` as a
+:class:`KanbanBoardView` renders one board from a :class:`~in_reach_ide.kanban_db.KanbanStore` as a
 row of :class:`_ColumnWidget`\\ s, each holding a drag-and-drop :class:`_CardList` of cards. The view
 never keeps state of its own beyond what it's currently showing -- every edit goes straight to the
 store, which notifies its listeners, and the view rebuilds itself from that (so the sidebar panel, a
@@ -51,8 +51,8 @@ from PyQt6.QtWidgets import (
     QWidget,
 )
 
-from in_reach.app.kanban_db import BoardData, Card, ColumnData, KanbanStore, Label
-from in_reach.ide.kanban_dialogs import CardDialog, LabelsDialog
+from in_reach_ide.kanban_db import BoardData, Card, ColumnData, KanbanStore, Label
+from in_reach_ide.kanban_dialogs import CardDialog, LabelsDialog
 
 _ROLE_ID = int(Qt.ItemDataRole.UserRole)
 _ROLE_DONE = _ROLE_ID + 1
@@ -413,7 +413,7 @@ class _BoardCanvas(QWidget):
 
 
 class KanbanBoardView(QWidget):
-    """One board, as a tab (see :meth:`in_reach.ide.tabs.TabPane.open_kanban_board`)."""
+    """One board, as a tab (see :meth:`in_reach_ide.tabs.TabPane.open_kanban_board`)."""
 
     def __init__(self, store: KanbanStore, board_id: int, parent: QWidget | None = None) -> None:
         super().__init__(parent)

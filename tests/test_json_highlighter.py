@@ -1,6 +1,6 @@
 from PyQt6.QtGui import QColor, QTextDocument
 
-from in_reach.ide.json_highlighter import JsonSyntaxHighlighter, _DARK_COLORS, _LIGHT_COLORS
+from in_reach_ide.json_highlighter import JsonSyntaxHighlighter, _DARK_COLORS, _LIGHT_COLORS
 
 
 def _highlight(text: str, *, base_color: str = "#ffffff") -> list[tuple[int, int, str]]:

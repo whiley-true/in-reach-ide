@@ -1,5 +1,5 @@
 from in_reach.app.vcs import Snapshot
-from in_reach.ide.git_graph import GitGraphWidget, compute_lanes
+from in_reach_ide.git_graph import GitGraphWidget, compute_lanes
 
 
 def _snap(sha: str, *, parents: list[str] = (), branches: list[str] = (), stamp: str | None = None) -> Snapshot:
@@ -122,7 +122,7 @@ def test_a_very_long_label_is_elided_to_fit_before_the_sha_column(qtbot) -> None
     # right-aligned sha text on that same row.
     from PyQt6.QtGui import QFont, QFontMetrics
 
-    from in_reach.ide.git_graph import elide_row_text
+    from in_reach_ide.git_graph import elide_row_text
 
     metrics = QFontMetrics(QFont())
     long_message = "a very long commit message " * 10
@@ -141,7 +141,7 @@ def test_a_very_long_label_is_elided_to_fit_before_the_sha_column(qtbot) -> None
 def test_short_label_and_branches_are_not_elided_when_they_fit(qtbot) -> None:
     from PyQt6.QtGui import QFont, QFontMetrics
 
-    from in_reach.ide.git_graph import elide_row_text
+    from in_reach_ide.git_graph import elide_row_text
 
     metrics = QFontMetrics(QFont())
     label, branch_text = elide_row_text(
@@ -155,7 +155,7 @@ def test_short_label_and_branches_are_not_elided_when_they_fit(qtbot) -> None:
 def test_branches_are_dropped_when_the_label_alone_already_fills_the_row(qtbot) -> None:
     from PyQt6.QtGui import QFont, QFontMetrics
 
-    from in_reach.ide.git_graph import elide_row_text
+    from in_reach_ide.git_graph import elide_row_text
 
     metrics = QFontMetrics(QFont())
     long_message = "a very long commit message " * 10

@@ -1,6 +1,6 @@
 from pathlib import Path
 
-from in_reach.app import indent_settings
+from in_reach_ide import indent_settings
 
 
 def test_get_indent_defaults_when_nothing_saved(tmp_path: Path) -> None:

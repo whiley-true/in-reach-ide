@@ -1,4 +1,4 @@
-"""Named color themes, loaded from ``in_reach/ide/themes/themes.json``.
+"""Named color themes, loaded from ``in_reach_ide/themes/themes.json``.
 
 QPalette-based rather than a hand-rolled QSS stylesheet: PyQt6's native widgets already respect
 QPalette roles (Window/Base/Text/Highlight/etc.) automatically, so a theme here is just a small
@@ -21,13 +21,13 @@ from pathlib import Path
 from PyQt6.QtGui import QColor, QPalette
 from PyQt6.QtWidgets import QApplication, QStyleFactory, QToolTip
 
-from in_reach.ide import style
+from in_reach_ide import style
 
 THEMES_PATH = Path(__file__).resolve().parent / "themes" / "themes.json"
 DEFAULT_THEME_NAME = "Light"
 DEFAULT_STATUS_BAR_COLOR = "#007acc"
 
-#: Persisted the same way :mod:`in_reach.ide.zoom` persists ``UI_ZOOM`` -- one shared key in the
+#: Persisted the same way :mod:`in_reach_ide.zoom` persists ``UI_ZOOM`` -- one shared key in the
 #: project-root ``.in-reach/.env``, read back by ``ide/app.py`` at startup so a theme picked from
 #: the Quick Access Bar's "Set Theme" command (or the Settings dialog) survives a relaunch.
 THEME_KEY = "THEME"

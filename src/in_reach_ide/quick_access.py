@@ -1,7 +1,7 @@
 """The Quick Access Bar: a VSCode-style pill centered in the top bar.
 
 ``Ctrl+P`` opens it as a file-name search (:meth:`QuickAccessBar.open_search`) across the active
-project's own files (see :mod:`in_reach.app.quick_open`); ``Ctrl+Shift+P`` opens it as a
+project's own files (see :mod:`in_reach_ide.quick_open`); ``Ctrl+Shift+P`` opens it as a
 ``>``-prefixed command palette (:meth:`QuickAccessBar.open_command_palette`); typing ``>`` as the
 very first character of an open search converts it into the palette live. Two more entry points
 back the bottom status bar's own clickable segments: :meth:`QuickAccessBar.open_goto_line` (Ln/Col)
@@ -31,7 +31,7 @@ from PyQt6.QtWidgets import (
     QWidget,
 )
 
-from in_reach.app import quick_open
+from in_reach_ide import quick_open
 
 _COMMAND_PREFIX = ">"
 _OVERLAY_WIDTH = 480

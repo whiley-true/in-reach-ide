@@ -1,4 +1,4 @@
-"""Tests for :mod:`in_reach.app.kanban_db` -- the SQLite-backed Kanban store."""
+"""Tests for :mod:`in_reach_ide.kanban_db` -- the SQLite-backed Kanban store."""
 
 from __future__ import annotations
 
@@ -7,8 +7,8 @@ from pathlib import Path
 
 import pytest
 
-from in_reach.app import kanban_db
-from in_reach.app.kanban_db import KanbanStore
+from in_reach_ide import kanban_db
+from in_reach_ide.kanban_db import KanbanStore
 
 
 @pytest.fixture

@@ -11,7 +11,7 @@ something the user needs to commit to. The two buttons above it hand the same fi
 editor tab or a popout window (MainWindow owns actually opening either, see
 :attr:`NotepadBox.open_in_editor_requested`/:attr:`NotepadBox.open_in_window_requested`).
 
-The line-number gutter is a small purpose-built one, not the full :class:`~in_reach.ide.editor.
+The line-number gutter is a small purpose-built one, not the full :class:`~in_reach_ide.editor.
 TextEditorWidget` (which carries a minimap, breadcrumb, fold markers and a find bar -- all more
 than a Dashboard box wants), following Qt's own standard "code editor" line-number recipe.
 """

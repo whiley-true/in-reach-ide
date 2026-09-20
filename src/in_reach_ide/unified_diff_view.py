@@ -3,7 +3,7 @@ that when clicking in history on commits - it extends to show a list of files ch
 then be clicked on to view (please note this should be a single (not split) view, see sample.png for
 styling))". Opened by the Git panel's own History section (see ``MainWindow.vcs_open_commit_diff``)
 for one file changed in a selected commit, ``HEAD``-vs-``HEAD``'s-own-first-parent -- distinct from
-:mod:`in_reach.ide.diff_view`'s side-by-side :class:`~in_reach.ide.diff_view.DiffViewWidget` (used
+:mod:`in_reach_ide.diff_view`'s side-by-side :class:`~in_reach_ide.diff_view.DiffViewWidget` (used
 for the Changes tab's own live working-tree diff, and the Compare window's own two-ref diff), which
 stays split intentionally per that same PROMPT.md line.
 
@@ -22,7 +22,7 @@ from PyQt6.QtCore import QRect, QSize, Qt
 from PyQt6.QtGui import QColor, QFontDatabase, QPainter, QPaintEvent, QPalette, QResizeEvent, QTextCharFormat, QTextCursor
 from PyQt6.QtWidgets import QHBoxLayout, QLabel, QPlainTextEdit, QTextEdit, QVBoxLayout, QWidget
 
-from in_reach.ide.json_highlighter import JsonSyntaxHighlighter
+from in_reach_ide.json_highlighter import JsonSyntaxHighlighter
 
 _REMOVED_COLOR = QColor(244, 63, 94, 45)
 _ADDED_COLOR = QColor(34, 197, 94, 45)
@@ -189,7 +189,7 @@ class _UnifiedDiffPane(QPlainTextEdit):
 class UnifiedDiffViewWidget(QWidget):
     """The tab's own content widget for a single commit's own file diff -- one running
     :class:`_UnifiedDiffPane`, not split. ``rel_path``/``sha`` together are what
-    :meth:`~in_reach.ide.tabs.TabPane.open_commit_diff` matches an already-open tab against."""
+    :meth:`~in_reach_ide.tabs.TabPane.open_commit_diff` matches an already-open tab against."""
 
     def __init__(self, *, rel_path: str, sha: str, old_text: str | None, new_text: str | None) -> None:
         super().__init__()

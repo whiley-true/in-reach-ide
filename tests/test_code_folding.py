@@ -1,4 +1,4 @@
-from in_reach.ide.code_folding import compute_fold_ranges
+from in_reach_ide.code_folding import compute_fold_ranges
 
 
 def test_a_single_multiline_object_is_foldable() -> None:

@@ -4,19 +4,20 @@ import sys
 from pathlib import Path
 
 import pytest
+from PyQt6.QtCore import Qt
 from PyQt6.QtWidgets import QMessageBox
 
-sys.path.insert(0, str(Path(__file__).parents[1] / "app" / "script_project"))
 from hill_project import hill_rush  # noqa: E402
 
+from in_reach import api
 from in_reach.app import new_project, script_preprocess  # noqa: E402
 from in_reach.app.rvt.compile import BuildMessage, BuildResult  # noqa: E402
-from in_reach.app.script_project import ProjectDiagnostic, is_linked, link  # noqa: E402
-from in_reach.ide.main_window import MainWindow  # noqa: E402
-from in_reach.ide.problems_panel import (  # noqa: E402
+from in_reach.app.script_project import is_linked, link  # noqa: E402
+from in_reach_ide.main_window import MainWindow  # noqa: E402
+from in_reach_ide.problems_panel import (  # noqa: E402
     Problem, ProblemsPanel, problems_from_build, problems_from_diagnostics,
 )
-from in_reach.ide.scripts_panel import ScriptsPanel, budget_rows  # noqa: E402
+from in_reach_ide.scripts_panel import ScriptsPanel, budget_rows  # noqa: E402
 
 
 @pytest.fixture
@@ -120,9 +121,9 @@ def test_the_where_column_names_the_file_and_line(qtbot) -> None:
 def test_diagnostics_become_problems_at_paths_under_script(tmp_path: Path) -> None:
     folder = tmp_path / "p"
     diagnostics = [
-        ProjectDiagnostic(severity="error", code="IR006", message="dup", file="blocks/setup.mgl", line=2, col=3, hint="rename it"),
-        ProjectDiagnostic(severity="error", code="settings-invalid", message="bad", file="../settings/script_settings.json"),
-        ProjectDiagnostic(severity="warning", code="x", message="whole project", file=""),
+        api.Diagnostic("error", "IR006", "dup", "blocks/setup.mgl", 2, 4, "rename it"),
+        api.Diagnostic("error", "settings-invalid", "bad", "../settings/script_settings.json"),
+        api.Diagnostic("warning", "x", "whole project", ""),
     ]
 
     first, second, third = problems_from_diagnostics(folder, diagnostics)
@@ -493,3 +494,230 @@ def test_a_linked_projects_apply_is_enabled_until_it_is_built(project_window, tm
     project_window._on_project_opened(folder)
 
     assert project_window.activity_bar.apply_button.isEnabled()
+
+
+# -- View Decompiled --------------------------------------------------------------------------------------------
+
+
+def test_view_decompiled_says_so_when_nothing_has_been_built(project_window, tmp_path: Path, monkeypatch) -> None:
+    shown = []
+    monkeypatch.setattr(QMessageBox, "information", lambda *a, **k: shown.append(a[2]))
+    project_window._on_project_opened(_single_file_project(tmp_path))
+
+    project_window.view_decompiled()
+
+    assert len(shown) == 1 and "in-reach build" in shown[0]
+
+
+def test_view_decompiled_opens_the_decompiled_script_read_only(project_window, tmp_path: Path, monkeypatch) -> None:
+    folder = _single_file_project(tmp_path)
+    project_window._on_project_opened(folder)
+    decompiled = folder / "build" / "Decompiled.txt"
+    decompiled.parent.mkdir(exist_ok=True)
+    decompiled.write_text("-- built script\nfor each player do\nend\n", encoding="utf-8")
+    monkeypatch.setattr(api, "show", lambda f, view: api.ShowResult(view, str(decompiled), decompiled.read_text(encoding="utf-8")))
+
+    project_window.view_decompiled()
+
+    editor = project_window.main_panel.active_pane.widget(project_window.main_panel.active_pane.currentIndex())
+    assert editor.path == decompiled and "for each player" in editor.toPlainText()
+
+
+def test_the_dashboard_button_and_palette_entry_open_the_decompiled_view(project_window, monkeypatch) -> None:
+    calls = []
+    monkeypatch.setattr(project_window, "view_decompiled", lambda: calls.append(True))
+    project_window.explorer_panel.view_decompiled_requested.disconnect()
+    project_window.explorer_panel.view_decompiled_requested.connect(lambda: calls.append("button"))
+
+    project_window.explorer_panel.view_decompiled_button.click()
+
+    assert calls == ["button"]
+    assert "View Decompiled" in {c.label for c in project_window.build_command_palette_commands()}
+
+
+def test_view_decompiled_with_no_project_does_nothing(project_window) -> None:
+    project_window.view_decompiled()  # must not raise
+
+
+# -- composing: module checkboxes, dragging blocks, moving fragments ----------------------------------------------------
+
+
+def _panel_for(qtbot, folder: Path) -> ScriptsPanel:
+    panel = ScriptsPanel()
+    qtbot.addWidget(panel)
+    panel.show_link(folder, link(folder, write=False), ["dev"], "dev")
+    return panel
+
+
+def _module_items(panel: ScriptsPanel) -> dict[str, tuple[str, bool]]:
+    tree = panel.modules_tree
+    return {
+        tree.topLevelItem(i).data(0, Qt.ItemDataRole.UserRole + 1): (
+            tree.topLevelItem(i).text(0), tree.topLevelItem(i).checkState(0) == Qt.CheckState.Checked
+        )
+        for i in range(tree.topLevelItemCount())
+    }
+
+
+def test_every_module_has_a_ticked_checkbox_and_filling_the_view_emits_nothing(qtbot, tmp_path: Path) -> None:
+    folder = _linked_project(tmp_path)
+    panel = ScriptsPanel()
+    qtbot.addWidget(panel)
+    seen = []
+    panel.module_toggled.connect(lambda *a: seen.append(a))
+
+    panel.show_link(folder, link(folder, write=False), [], None)
+
+    assert {name: on for name, (_, on) in _module_items(panel).items()} == {"hill_score": True, "hill_buff": True} and seen == []
+
+
+def test_clearing_a_modules_checkbox_reports_it(qtbot, tmp_path: Path) -> None:
+    panel = _panel_for(qtbot, _linked_project(tmp_path))
+
+    with qtbot.waitSignal(panel.module_toggled) as signal:
+        panel.modules_tree.topLevelItem(1).setCheckState(0, Qt.CheckState.Unchecked)
+
+    assert signal.args == ["hill_buff", False]
+
+
+def test_a_module_that_is_switched_off_is_listed_unticked(qtbot, tmp_path: Path) -> None:
+    from in_reach.app.script_project import edit
+
+    folder = _linked_project(tmp_path)
+    edit.set_module_enabled(folder, "hill_buff", False)
+
+    panel = _panel_for(qtbot, folder)
+
+    assert _module_items(panel)["hill_buff"] == ("hill_buff (off)", False) and _module_items(panel)["hill_score"][1] is True
+
+
+def test_the_blocks_tree_lists_each_blocks_fragments_under_it(qtbot, tmp_path: Path) -> None:
+    panel = _panel_for(qtbot, _linked_project(tmp_path))
+
+    hill_pass = panel.blocks_tree.topLevelItem(1)
+
+    assert panel.block_names() == ["SETUP", "HILL_PASS", "WIN_CHECK"]
+    assert [hill_pass.child(i).text(0).strip() for i in range(hill_pass.childCount())] == ["hill_score.score", "hill_buff.buff"]
+    assert hill_pass.child(0).text(1) == "for each player"
+
+
+def test_only_blocks_can_be_dragged_and_nothing_accepts_a_drop_onto_a_row(qtbot, tmp_path: Path) -> None:
+    panel = _panel_for(qtbot, _linked_project(tmp_path))
+    block = panel.blocks_tree.topLevelItem(1)
+    fragment = block.child(0)
+
+    assert bool(block.flags() & Qt.ItemFlag.ItemIsDragEnabled) and not bool(block.flags() & Qt.ItemFlag.ItemIsDropEnabled)
+    assert not bool(fragment.flags() & Qt.ItemFlag.ItemIsDragEnabled) and not bool(fragment.flags() & Qt.ItemFlag.ItemIsDropEnabled)
+
+
+def test_dragging_a_block_reports_the_new_order(qtbot, tmp_path: Path) -> None:
+    panel = _panel_for(qtbot, _linked_project(tmp_path))
+    panel.blocks_tree.insertTopLevelItem(0, panel.blocks_tree.takeTopLevelItem(2))  # what the drop does to the tree
+
+    with qtbot.waitSignal(panel.blocks_reordered) as signal:
+        panel._on_blocks_moved()
+
+    assert signal.args == [["WIN_CHECK", "SETUP", "HILL_PASS"]]
+
+
+def test_rebuilding_the_tree_is_not_reported_as_a_reorder(qtbot, tmp_path: Path) -> None:
+    folder = _linked_project(tmp_path)
+    panel = ScriptsPanel()
+    qtbot.addWidget(panel)
+    seen = []
+    panel.blocks_reordered.connect(lambda order: seen.append(order))
+
+    panel.show_link(folder, link(folder, write=False), [], None)
+
+    assert seen == []
+
+
+def test_a_fragments_menu_offers_every_other_block(qtbot, tmp_path: Path) -> None:
+    panel = _panel_for(qtbot, _linked_project(tmp_path))
+    fragment = panel.blocks_tree.topLevelItem(1).child(0)
+
+    menu = panel.fragment_menu(fragment)
+    move = menu.actions()[0].menu()
+    offered = {a.text(): a.isEnabled() for a in move.actions()}
+
+    assert offered == {"SETUP": True, "HILL_PASS": False, "WIN_CHECK": True}
+    with qtbot.waitSignal(panel.fragment_move_requested) as signal:
+        next(a for a in move.actions() if a.text() == "WIN_CHECK").trigger()
+    assert signal.args == ["hill_score.score", "WIN_CHECK"]
+
+
+def test_only_a_fragment_row_has_a_menu(qtbot, tmp_path: Path) -> None:
+    panel = _panel_for(qtbot, _linked_project(tmp_path))
+
+    assert panel.fragment_menu(panel.blocks_tree.topLevelItem(0)) is None and panel.fragment_menu(None) is None
+
+
+def _toml(folder: Path) -> str:
+    return (folder / "script" / "project.toml").read_text(encoding="utf-8")
+
+
+def test_the_window_switches_a_module_off_and_on(project_window, tmp_path: Path) -> None:
+    folder = _linked_project(tmp_path)
+    project_window._on_project_opened(folder)
+
+    project_window.set_script_module_enabled("hill_buff", False)
+    off = "enabled = false" in _toml(folder)
+    listed_off = _module_items(project_window.scripts_panel)["hill_buff"]
+    project_window.set_script_module_enabled("hill_buff", True)
+
+    assert off and listed_off == ("hill_buff (off)", False)
+    assert "enabled" not in _toml(folder)
+
+
+def test_the_window_writes_a_dragged_block_order(project_window, tmp_path: Path) -> None:
+    folder = _linked_project(tmp_path)
+    project_window._on_project_opened(folder)
+
+    project_window.set_script_block_order(["WIN_CHECK", "SETUP", "HILL_PASS"])
+
+    assert project_window.scripts_panel.block_names() == ["WIN_CHECK", "SETUP", "HILL_PASS"]
+    assert 'order = ["WIN_CHECK", "SETUP", "HILL_PASS"]' in _toml(folder)
+
+
+def test_the_window_moves_a_fragment_and_the_views_follow(project_window, tmp_path: Path) -> None:
+    folder = _linked_project(tmp_path)
+    project_window._on_project_opened(folder)
+
+    project_window.move_script_fragment("hill_score.score", "WIN_CHECK")
+
+    win_check = project_window.scripts_panel.blocks_tree.topLevelItem(2)
+    assert [win_check.child(i).text(0).strip() for i in range(win_check.childCount())] == ["hill_score.score"]
+    assert "@fragment WIN_CHECK.score" in (folder / "script" / "modules" / "hill_score" / "hill_score.mgl").read_text(encoding="utf-8")
+
+
+def test_a_refused_edit_is_reported_and_the_views_snap_back(project_window, tmp_path: Path, monkeypatch) -> None:
+    folder = _linked_project(tmp_path)
+    project_window._on_project_opened(folder)
+    shown = []
+    monkeypatch.setattr(QMessageBox, "warning", lambda *a, **k: shown.append(a[2]))
+
+    project_window.move_script_fragment("ghost.f", "SETUP")
+    project_window.set_script_block_order(["not valid"])
+
+    assert len(shown) == 2 and "no fragment ghost.f" in shown[0] and "valid block name" in shown[1]
+    assert project_window.scripts_panel.block_names() == ["SETUP", "HILL_PASS", "WIN_CHECK"]  # nothing changed
+
+
+def test_composing_with_no_project_open_does_nothing(project_window) -> None:
+    project_window.set_script_module_enabled("x", False)
+    project_window.set_script_block_order(["A"])
+    project_window.move_script_fragment("a.b", "C")  # none of these raise
+
+
+def test_the_palette_offers_to_enable_what_is_off_and_disable_what_is_on(project_window, tmp_path: Path) -> None:
+    from in_reach.app.script_project import edit
+
+    folder = _linked_project(tmp_path)
+    edit.set_module_enabled(folder, "hill_buff", False)
+    project_window._on_project_opened(folder)
+    commands = {c.label: c for c in project_window.build_command_palette_commands()}
+
+    assert [c.label for c in commands["Enable Script Module"].children] == ["hill_buff"]
+    assert [c.label for c in commands["Disable Script Module"].children] == ["hill_score"]
+    commands["Enable Script Module"].children[0].action()
+    assert "enabled" not in _toml(folder)

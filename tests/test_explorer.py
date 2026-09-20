@@ -4,7 +4,7 @@ import pytest
 from PyQt6.QtCore import Qt
 from PyQt6.QtWidgets import QFrame, QLabel
 
-from in_reach.ide.explorer import ExplorerPanel
+from in_reach_ide.explorer import ExplorerPanel
 
 
 @pytest.fixture
@@ -34,7 +34,7 @@ def test_stats_progress_bar_has_no_border(panel: ExplorerPanel) -> None:
 def test_progress_bars_are_smaller_than_fusions_own_default_height(panel: ExplorerPanel) -> None:
     # PROMPT.md: "please in the dashboard make the progress bars a little smaller (they're a bit
     # imposing at the moment)".
-    from in_reach.ide.explorer import _PROGRESS_BAR_HEIGHT
+    from in_reach_ide.explorer import _PROGRESS_BAR_HEIGHT
 
     assert panel.stats_progress.height() == _PROGRESS_BAR_HEIGHT
     assert panel.trigger_stat.progress.height() == _PROGRESS_BAR_HEIGHT

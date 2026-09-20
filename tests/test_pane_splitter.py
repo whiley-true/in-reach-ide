@@ -2,7 +2,7 @@ from PyQt6.QtCore import QPointF, Qt
 from PyQt6.QtGui import QMouseEvent
 from PyQt6.QtWidgets import QApplication, QWidget
 
-from in_reach.ide.pane_splitter import PaneSplitter, _DragHandle
+from in_reach_ide.pane_splitter import PaneSplitter, _DragHandle
 
 
 def _mouse_event(kind: QMouseEvent.Type, global_x: float) -> QMouseEvent:

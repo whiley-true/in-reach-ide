@@ -3,7 +3,7 @@ from pathlib import Path
 import pytest
 from PyQt6.QtGui import QColor
 
-from in_reach.ide import file_icons
+from in_reach_ide import file_icons
 
 
 def _has_opaque_pixel(image) -> bool:

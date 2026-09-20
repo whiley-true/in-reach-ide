@@ -5,10 +5,10 @@ from PyQt6 import sip
 from PyQt6.QtWidgets import QApplication, QLabel, QMenu, QMessageBox, QTabBar, QToolButton
 
 import in_reach
-from in_reach.ide import icons
-from in_reach.ide import tabs as tabs_module
-from in_reach.ide.main_window import MainWindow
-from in_reach.ide.tabs import (
+from in_reach_ide import icons
+from in_reach_ide import tabs as tabs_module
+from in_reach_ide.main_window import MainWindow
+from in_reach_ide.tabs import (
     _MAX_H_SPLITS,
     _TAB_CLOSE_ICON_COLOR,
     _TAB_CLOSE_ICON_SIZE,
@@ -17,7 +17,7 @@ from in_reach.ide.tabs import (
     _SaveChoice,
     _TabState,
 )
-from in_reach.ide.welcome import WelcomeTab
+from in_reach_ide.welcome import WelcomeTab
 
 
 @pytest.fixture
@@ -724,7 +724,7 @@ def test_context_menu_save_action_saves_the_right_clicked_tab(
 
 
 def test_move_to_window_creates_a_popout_with_the_tab(window: MainWindow, monkeypatch, tmp_path: Path) -> None:
-    from in_reach.ide.tabs import _PopoutWindow
+    from in_reach_ide.tabs import _PopoutWindow
 
     pane = window.main_panel.panes[0]
     file_path = tmp_path / "notes.txt"
@@ -812,7 +812,7 @@ def test_a_tab_can_be_dragged_from_the_main_window_into_a_popout(window: MainWin
     dragged_widget = pane.widget(remaining_index)
 
     from PyQt6.QtCore import QMimeData
-    from in_reach.ide.tabs import _MIME_TYPE
+    from in_reach_ide.tabs import _MIME_TYPE
 
     class _FakeDropEvent:
         def __init__(self, mime):
@@ -875,7 +875,7 @@ def test_clicking_the_popouts_own_close_button_with_the_last_tab_closes_it(
 def test_clicking_the_popouts_own_close_button_prompts_for_a_dirty_tab(
     window: MainWindow, monkeypatch
 ) -> None:
-    from in_reach.ide.tabs import _SaveChoice
+    from in_reach_ide.tabs import _SaveChoice
 
     pane = window.main_panel.panes[0]
     window.main_panel.new_tab_in(pane)
@@ -1121,7 +1121,7 @@ def test_open_file_shows_no_icon_for_a_regular_file(window: MainWindow, tmp_path
 
 
 def test_open_file_opens_a_markdown_file_as_a_rendered_preview(window: MainWindow, tmp_path: Path) -> None:
-    from in_reach.ide.markdown_preview import MarkdownPreviewWidget
+    from in_reach_ide.markdown_preview import MarkdownPreviewWidget
 
     pane = window.main_panel.panes[0]
     source = tmp_path / "README.md"
@@ -1166,7 +1166,7 @@ def test_saving_a_markdown_preview_tab_does_not_touch_the_file(window: MainWindo
 
 
 def test_splitting_a_pane_with_a_markdown_preview_duplicates_it(window: MainWindow, tmp_path: Path) -> None:
-    from in_reach.ide.markdown_preview import MarkdownPreviewWidget
+    from in_reach_ide.markdown_preview import MarkdownPreviewWidget
 
     source = tmp_path / "README.md"
     source.write_text("# Heading\n", encoding="utf-8")
@@ -1186,7 +1186,7 @@ def test_splitting_a_pane_with_a_markdown_preview_duplicates_it(window: MainWind
 
 
 def test_open_file_editable_markdown_opens_a_real_text_editor(window: MainWindow, tmp_path: Path) -> None:
-    from in_reach.ide.editor import TextEditorWidget
+    from in_reach_ide.editor import TextEditorWidget
 
     pane = window.main_panel.panes[0]
     source = tmp_path / "Notes.md"
@@ -1234,7 +1234,7 @@ def test_preview_button_does_not_show_for_the_read_only_markdown_preview(
 def test_preview_split_from_shows_a_live_markdown_preview_beside_the_editor(
     window: MainWindow, tmp_path: Path
 ) -> None:
-    from in_reach.ide.markdown_preview import MarkdownPreviewWidget
+    from in_reach_ide.markdown_preview import MarkdownPreviewWidget
 
     pane = window.main_panel.panes[0]
     source = tmp_path / "Notes.md"
@@ -1582,7 +1582,7 @@ def test_open_file_reports_an_unreadable_file_rather_than_raising(
 # appear showing the original on the left and highlighted changes on the right (like vscode git)")
 
 def test_open_diff_adds_a_diff_view_tab(window: MainWindow) -> None:
-    from in_reach.ide.diff_view import DiffViewWidget
+    from in_reach_ide.diff_view import DiffViewWidget
 
     pane = window.main_panel.panes[0]
 
@@ -1619,7 +1619,7 @@ def test_open_diff_refreshes_an_already_open_tabs_content(window: MainWindow) ->
 
 
 def test_open_diff_is_never_dirty(window: MainWindow) -> None:
-    from in_reach.ide.tabs import _is_modified
+    from in_reach_ide.tabs import _is_modified
 
     pane = window.main_panel.panes[0]
 
@@ -1688,7 +1688,7 @@ def test_open_head_file_refreshes_an_already_open_tabs_content(window: MainWindo
 
 
 def test_open_head_file_is_never_dirty(window: MainWindow) -> None:
-    from in_reach.ide.tabs import _is_modified
+    from in_reach_ide.tabs import _is_modified
 
     pane = window.main_panel.panes[0]
 
@@ -1718,7 +1718,7 @@ def test_open_head_file_does_not_collide_with_open_file_for_the_same_path(
 
 
 def test_open_commit_diff_adds_a_unified_diff_tab(window: MainWindow) -> None:
-    from in_reach.ide.unified_diff_view import UnifiedDiffViewWidget
+    from in_reach_ide.unified_diff_view import UnifiedDiffViewWidget
 
     pane = window.main_panel.panes[0]
 
@@ -1753,7 +1753,7 @@ def test_open_commit_diff_opens_a_separate_tab_for_a_different_commit(window: Ma
 
 
 def test_open_commit_diff_is_never_dirty(window: MainWindow) -> None:
-    from in_reach.ide.tabs import _is_modified
+    from in_reach_ide.tabs import _is_modified
 
     pane = window.main_panel.panes[0]
 

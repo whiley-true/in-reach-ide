@@ -4,11 +4,11 @@ side panel and allow the user to choose or create a board and set background col
 view").
 
 Lists the active gametype project's own boards from the shared
-:class:`~in_reach.app.kanban_db.KanbanStore` (one database, many projects, many boards); this panel
+:class:`~in_reach_ide.kanban_db.KanbanStore` (one database, many projects, many boards); this panel
 only manages boards -- create/open/rename/delete, which one is the default, and the selected board's
 background -- while the board itself is drawn in an editor tab by
-:class:`~in_reach.ide.kanban_board.KanbanBoardView`. Opening a board is reported via
-:attr:`KanbanPanel.open_board_requested`; :class:`~in_reach.ide.main_window.MainWindow` owns
+:class:`~in_reach_ide.kanban_board.KanbanBoardView`. Opening a board is reported via
+:attr:`KanbanPanel.open_board_requested`; :class:`~in_reach_ide.main_window.MainWindow` owns
 actually opening the tab, and creates the store lazily the first time the view is shown (see
 :meth:`KanbanPanel.set_store`).
 """
@@ -32,9 +32,9 @@ from PyQt6.QtWidgets import (
 )
 
 from in_reach.app import new_project
-from in_reach.app.kanban_db import Board, KanbanStore, Project
-from in_reach.ide import file_dialogs
-from in_reach.ide.kanban_dialogs import pick_color, swatch_icon
+from in_reach_ide.kanban_db import Board, KanbanStore, Project
+from in_reach_ide import file_dialogs
+from in_reach_ide.kanban_dialogs import pick_color, swatch_icon
 
 _NO_PROJECT_TEXT = "No project opened yet -- create or load one from the Welcome tab."
 _IMAGE_FILTER = "Images (*.png *.jpg *.jpeg *.bmp *.gif *.webp);;All files (*)"

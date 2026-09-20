@@ -3,7 +3,7 @@ from ctypes import wintypes
 
 import pytest
 
-from in_reach.ide.win_native_filter import WM_GETOBJECT, BlockAccessibilityQueries
+from in_reach_ide.win_native_filter import WM_GETOBJECT, BlockAccessibilityQueries
 
 
 def _msg_address(message: int) -> int:
@@ -17,7 +17,7 @@ def _msg_address(message: int) -> int:
 
 @pytest.fixture(autouse=True)
 def _windows_platform(monkeypatch):
-    monkeypatch.setattr("in_reach.ide.win_native_filter.sys.platform", "win32")
+    monkeypatch.setattr("in_reach_ide.win_native_filter.sys.platform", "win32")
 
 
 def test_swallows_wm_getobject():
@@ -43,7 +43,7 @@ def test_ignores_non_windows_event_types():
 
 
 def test_never_intercepts_off_windows(monkeypatch):
-    monkeypatch.setattr("in_reach.ide.win_native_filter.sys.platform", "linux")
+    monkeypatch.setattr("in_reach_ide.win_native_filter.sys.platform", "linux")
     result, _code = BlockAccessibilityQueries().nativeEventFilter(
         b"windows_generic_MSG", _msg_address(WM_GETOBJECT)
     )

@@ -1,6 +1,6 @@
 """A VSCode-style sidebar section header: an arrow + title, click to toggle, above a divider line
 and a body widget that hides/shows with it. Originally built for the Dashboard's own Stats/Quick
-Launch/Settings boxes (see :mod:`in_reach.ide.explorer`'s own history), factored out here once the
+Launch/Settings boxes (see :mod:`in_reach_ide.explorer`'s own history), factored out here once the
 Git panel needed the exact same treatment (PROMPT.md: "please add section headings to the vcs sub
 panel to make it clearer") -- no behavior change for either caller, just a shared home so the two
 don't duplicate this widget.

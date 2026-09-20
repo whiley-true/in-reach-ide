@@ -1,4 +1,4 @@
-"""Tests for :mod:`in_reach.ide.kanban_board` -- the Kanban board editor tab (PROMPT.md: "the board
+"""Tests for :mod:`in_reach_ide.kanban_board` -- the Kanban board editor tab (PROMPT.md: "the board
 should function like a simple Trello: add column, rename, delete; add card, title, description,
 label (edit, delete, make labels); mark as done")."""
 
@@ -10,9 +10,9 @@ import pytest
 from PyQt6.QtCore import QPoint, Qt
 from PyQt6.QtGui import QColor, QPixmap
 
-from in_reach.app.kanban_db import KanbanStore
-from in_reach.ide.kanban_board import KanbanBoardView, _CardDelegate
-from in_reach.ide.kanban_dialogs import CardDialog, LabelsDialog
+from in_reach_ide.kanban_db import KanbanStore
+from in_reach_ide.kanban_board import KanbanBoardView, _CardDelegate
+from in_reach_ide.kanban_dialogs import CardDialog, LabelsDialog
 
 
 @pytest.fixture

@@ -4,9 +4,9 @@ import pytest
 from PyQt6.QtCore import Qt
 from PyQt6.QtWidgets import QPlainTextEdit
 
-from in_reach.ide.editor import TextEditorWidget
-from in_reach.ide.find_replace import FindReplaceBar, compile_search_pattern, preserve_case
-from in_reach.ide.main_window import MainWindow
+from in_reach_ide.editor import TextEditorWidget
+from in_reach_ide.find_replace import FindReplaceBar, compile_search_pattern, preserve_case
+from in_reach_ide.main_window import MainWindow
 
 # -- compile_search_pattern --------------------------------------------------------------------
 

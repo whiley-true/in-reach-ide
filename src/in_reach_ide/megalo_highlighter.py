@@ -13,7 +13,7 @@ the module layer make significant:
   its own;
 * ``${NAME}`` placeholders, in code and in annotation arguments alike.
 
-The palette is fixed, like :mod:`in_reach.ide.json_highlighter`'s, in a light and a dark variant chosen from the
+The palette is fixed, like :mod:`in_reach_ide.json_highlighter`'s, in a light and a dark variant chosen from the
 editor's background.
 """
 
@@ -23,7 +23,7 @@ import re
 
 from PyQt6.QtGui import QColor, QFont, QSyntaxHighlighter, QTextCharFormat, QTextDocument
 
-from in_reach.ide.json_highlighter import _is_dark
+from in_reach_ide.json_highlighter import _is_dark
 
 KEYWORDS = frozenset({
     "if", "then", "altif", "alt", "do", "end", "for", "each", "on", "function", "alias", "declare",

@@ -1,4 +1,4 @@
-from in_reach.ide.settings_dialog import SettingsDialog
+from in_reach_ide.settings_dialog import SettingsDialog
 
 
 def test_settings_dialog_has_system_ui_and_theme_tabs(qtbot) -> None:

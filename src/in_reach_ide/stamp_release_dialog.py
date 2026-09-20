@@ -4,11 +4,11 @@ functionality for version numbers using major, minor, patch with stamped release
 version should reveal spin buttons centered at the present number allowing the user to 'bump'
 either major minor or patch").
 
-A plain modal dialog: a "Release Message" field (the field :mod:`in_reach.ide.git_panel` used to
+A plain modal dialog: a "Release Message" field (the field :mod:`in_reach_ide.git_panel` used to
 label "Commit Message" for this same action) plus three spin boxes -- Major/Minor/Patch -- each
 seeded with the project's current version number's own component, so "bumping" one is just clicking
 its spin box's up arrow once. Nothing here decides *whether* stamping should be allowed (see
-:meth:`in_reach.ide.git_panel.GitPanel.set_stamp_enabled`'s own docstring for the "can't stamp an
+:meth:`in_reach_ide.git_panel.GitPanel.set_stamp_enabled`'s own docstring for the "can't stamp an
 uncompiled gametype" gate, and :func:`in_reach.app.vcs.version_already_stamped` for the "same
 version already stamped" warning) -- this dialog only ever collects a message and a version number.
 """

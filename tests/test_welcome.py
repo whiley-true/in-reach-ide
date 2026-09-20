@@ -3,14 +3,15 @@ from pathlib import Path
 import pytest
 from PyQt6.QtWidgets import QDialog
 
-from in_reach.app import env_file, new_project, recent, system_verify
+from in_reach.app import env_file, new_project, system_verify
+from in_reach_ide import recent
 from in_reach.app.categories import EngineCategory
 from in_reach.app.rvt import rvt_bridge
 from in_reach.app.system_verify import Outcome, VerifyRun
-from in_reach.ide.new_project_dialog import NewProjectDialog
-from in_reach.ide.settings_info_dialog import SettingsInfoDialog
-from in_reach.ide.verify_dialog import VerifyDialog
-from in_reach.ide.welcome import WelcomeTab
+from in_reach_ide.new_project_dialog import NewProjectDialog
+from in_reach_ide.settings_info_dialog import SettingsInfoDialog
+from in_reach_ide.verify_dialog import VerifyDialog
+from in_reach_ide.welcome import WelcomeTab
 
 _NEEDS_NATIVE_RVT = pytest.mark.skipif(
     not rvt_bridge.is_available(), reason="native _reachvarianttool extension not available on this platform"
@@ -245,7 +246,7 @@ def test_a_category_icon_mismatch_warning_is_shown_but_does_not_block_creation(
     monkeypatch.setattr(new_project, "create_gametype_project", fake_create)
     shown: list[str] = []
     monkeypatch.setattr(
-        "in_reach.ide.welcome.QMessageBox.warning", lambda *args, **kwargs: shown.append(args[2])
+        "in_reach_ide.welcome.QMessageBox.warning", lambda *args, **kwargs: shown.append(args[2])
     )
     opened: list[Path] = []
     welcome.project_opened.connect(opened.append)
@@ -305,7 +306,7 @@ def test_new_project_from_an_empty_variant_folder_says_so(
     welcome.refresh()
     shown: list[str] = []
     monkeypatch.setattr(
-        "in_reach.ide.welcome.QMessageBox.information", lambda *args, **kwargs: shown.append(args[2])
+        "in_reach_ide.welcome.QMessageBox.information", lambda *args, **kwargs: shown.append(args[2])
     )
     monkeypatch.setattr(NewProjectDialog, "exec", lambda self: pytest.fail("should not have opened"))
 
@@ -417,7 +418,7 @@ def test_new_project_dialog_field_labels_are_forced_white_on_a_dark_theme(qtbot)
     # dark_dark_text.png: the Title/Description field labels read low-contrast on Dark/Whiley.
     from PyQt6.QtWidgets import QApplication
 
-    from in_reach.ide import theme as theme_module
+    from in_reach_ide import theme as theme_module
 
     app = QApplication.instance()
     original_palette = app.palette()
@@ -434,7 +435,7 @@ def test_new_project_dialog_field_labels_are_forced_white_on_a_dark_theme(qtbot)
 def test_new_project_dialog_field_labels_are_untouched_on_the_light_theme(qtbot) -> None:
     from PyQt6.QtWidgets import QApplication
 
-    from in_reach.ide import theme as theme_module
+    from in_reach_ide import theme as theme_module
 
     app = QApplication.instance()
     original_palette = app.palette()

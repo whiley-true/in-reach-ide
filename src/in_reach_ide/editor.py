@@ -6,17 +6,17 @@ Adds, on top of the base ``QPlainTextEdit`` (PROMPT.md, across two passes):
   repainted from ``QPlainTextEdit``'s own block-layout geometry rather than tracked as separate
   state, so it can never drift out of sync with the actual text.
 - Fold markers in that same gutter, and the bracket-matching behind them (see
-  :mod:`in_reach.ide.code_folding`) -- "collapsible and expandable snippets". Bracket-based, not
+  :mod:`in_reach_ide.code_folding`) -- "collapsible and expandable snippets". Bracket-based, not
   JSON-specific, so it works the same for a Megalo ``script.txt`` as a settings ``.json``.
 - Indent guides -- thin vertical lines through the text area at each indentation level (PROMPT.md:
   "the | symbol to show line markers"; a first pass read this as the fold arrows above instead, per
   a later PROMPT.md pass -- "we're still missing the | symbol" -- that one wasn't it).
 - A breadcrumb bar pinned above the text -- the open file's own path, plus (for a ``.json`` file
   specifically) the live JSON structural path to wherever the cursor currently sits (see
-  :mod:`in_reach.ide.json_breadcrumb`).
-- Megalo syntax highlighting (see :mod:`in_reach.ide.megalo_highlighter`) for a project's ``.mgl`` files,
+  :mod:`in_reach_ide.json_breadcrumb`).
+- Megalo syntax highlighting (see :mod:`in_reach_ide.megalo_highlighter`) for a project's ``.mgl`` files,
   ``script/output.txt`` and ``build/Compiled.txt``.
-- JSON syntax highlighting (see :mod:`in_reach.ide.json_highlighter`), attached only when the
+- JSON syntax highlighting (see :mod:`in_reach_ide.json_highlighter`), attached only when the
   file's own extension is ``.json``.
 - A minimap pinned along the right edge, next to the vertical scrollbar (PROMPT.md: "a live code
   preview on the right hand side next to the scrollbar") -- see :class:`_Minimap`.
@@ -75,14 +75,14 @@ from PyQt6.QtWidgets import (
     QWidget,
 )
 
-from in_reach.app import indent_settings
-from in_reach.ide import indent_state, schema_check
-from in_reach.ide.code_folding import compute_fold_ranges
-from in_reach.ide.find_replace import FindReplaceBar
-from in_reach.ide.json_breadcrumb import json_breadcrumb_path
-from in_reach.ide.json_highlighter import JsonSyntaxHighlighter
-from in_reach.ide.json_position import find_value_spans
-from in_reach.ide.megalo_highlighter import MegaloSyntaxHighlighter
+from in_reach_ide import indent_settings
+from in_reach_ide import indent_state, schema_check
+from in_reach_ide.code_folding import compute_fold_ranges
+from in_reach_ide.find_replace import FindReplaceBar
+from in_reach_ide.json_breadcrumb import json_breadcrumb_path
+from in_reach_ide.json_highlighter import JsonSyntaxHighlighter
+from in_reach_ide.json_position import find_value_spans
+from in_reach_ide.megalo_highlighter import MegaloSyntaxHighlighter
 
 # Padding on each side of the line-number digits, so they don't sit flush against the text or the
 # panel's own edge.
@@ -140,7 +140,7 @@ _RESOLVED_NAME_WARNING = "This is a resolved display name and can't be edited he
 #: own hand-relevant settings files (see :mod:`in_reach.app.new_project`'s own module docstring:
 #: ``settings/settings.json``/``script_settings.json``/``strings.json``), read 10% larger than
 #: every other editor tab, same "+N% on top of the live app font" pattern as
-#: :data:`~in_reach.ide.explorer.ExplorerPanel.TEXT_SCALE`.
+#: :data:`~in_reach_ide.explorer.ExplorerPanel.TEXT_SCALE`.
 ENLARGED_FILENAMES = frozenset({"settings.json", "script_settings.json", "strings.json"})
 FONT_SCALE = 1.1
 
@@ -500,7 +500,7 @@ class _PlainTextEditor(QPlainTextEdit):
         :data:`ENLARGED_FILENAMES` specifically -- every other file just gets the plain app font.
         Called from :meth:`set_path` (a fresh open, or a Save As landing on/off one of those
         names) and again after a live zoom change (see
-        ``MainWindow._adjust_zoom()``) -- like :meth:`~in_reach.ide.explorer.ExplorerPanel.
+        ``MainWindow._adjust_zoom()``) -- like :meth:`~in_reach_ide.explorer.ExplorerPanel.
         refresh_font_scale`, setting a font directly is a one-time snapshot, not a live binding to
         ``QApplication.font()``, so it goes stale after a zoom change unless this runs again.
         """
@@ -552,7 +552,7 @@ class _PlainTextEditor(QPlainTextEdit):
         # PROMPT.md (Quick Access Bar work): "Indent using spaces" -- a plain Tab (no modifiers, so
         # Shift+Tab's own default Qt focus-navigation behavior is untouched) inserts the project's
         # configured indent width in spaces instead of QPlainTextEdit's own literal-tab-character
-        # default, whenever that's the live setting (see in_reach.ide.indent_state).
+        # default, whenever that's the live setting (see in_reach_ide.indent_state).
         if event.key() == Qt.Key.Key_Tab and event.modifiers() == Qt.KeyboardModifier.NoModifier:
             style, width = indent_state.get_indent()
             if style == indent_settings.STYLE_SPACES:
@@ -600,7 +600,7 @@ class _PlainTextEditor(QPlainTextEdit):
         """Character spans of every top-level ``forge_labels[].name`` value, for a
         ``script_settings.json`` document that has a ``forge_labels`` array -- uses the same
         loc-path-to-span machinery as schema_check's own validation-error underlining
-        (:func:`~in_reach.ide.json_position.find_value_spans`), so a span stays correct as edits
+        (:func:`~in_reach_ide.json_position.find_value_spans`), so a span stays correct as edits
         elsewhere shift the labels around. Empty (not ``None``) for anything that isn't JSON, isn't
         valid JSON right now, or
         has no ``forge_labels`` array -- nothing to protect."""
@@ -983,8 +983,8 @@ class _PlainTextEditor(QPlainTextEdit):
         should be a window that appears when hovering on the red underlined text"), plus a red line
         in the minimap for each offending line (PROMPT.md: "it should highlight errors as a line in
         colour"). Re-evaluated on every keystroke. Purely advisory: the actual reject-on-save
-        enforcement is :func:`~in_reach.ide.schema_check.validate_before_save`, called separately by
-        :meth:`~in_reach.ide.tabs.TabPane._save_tab`."""
+        enforcement is :func:`~in_reach_ide.schema_check.validate_before_save`, called separately by
+        :meth:`~in_reach_ide.tabs.TabPane._save_tab`."""
         errors = schema_check.find_errors(self.path, self.toPlainText()) if self.path is not None else None
         if not errors:
             self._error_spans = []

@@ -1,7 +1,7 @@
 """Stub primary-sidebar view behind the activity bar's sprinting-man icon (PROMPT.md: "please add an
 icon under testing for playtest which should be the icon of a sprinting man (please add entry under
 view too)"). No real content yet -- same placeholder-only treatment as
-:mod:`in_reach.ide.testing_panel`.
+:mod:`in_reach_ide.testing_panel`.
 """
 
 from __future__ import annotations

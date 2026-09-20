@@ -7,7 +7,7 @@ from pathlib import Path
 import pytest
 
 from in_reach.app import output_view, script_preprocess
-from in_reach.ide.main_window import MainWindow
+from in_reach_ide.main_window import MainWindow
 
 
 @pytest.fixture

@@ -7,7 +7,7 @@ Lists where each map-variant folder actually lives as a clickable, link-styled "
 resolved path itself, elided down the middle when the sidebar's too narrow for all of it -- that
 opens the folder in the OS file explorer, plus an "Open In-Reach Maps" button for in-reach's own
 maps folder. Like the Dashboard's Quick Launch buttons, this panel only *reports* a click (see
-:attr:`MapsPanel.open_folder_requested`); :class:`~in_reach.ide.main_window.MainWindow` owns
+:attr:`MapsPanel.open_folder_requested`); :class:`~in_reach_ide.main_window.MainWindow` owns
 resolving and opening the folder, and pushes the current paths in via :meth:`MapsPanel.set_paths`.
 """
 
@@ -82,7 +82,7 @@ class _SlugButton(QPushButton):
 class MapsPanel(QWidget):
     #: Emitted with the :mod:`in_reach.app.system_verify` env key of whichever folder was clicked
     #: -- the same signal shape (and the same MainWindow slot) as the Dashboard's own Quick Launch
-    #: "Built-in" buttons, see :attr:`~in_reach.ide.explorer.ExplorerPanel.
+    #: "Built-in" buttons, see :attr:`~in_reach_ide.explorer.ExplorerPanel.
     #: open_builtin_folder_requested`.
     open_folder_requested = pyqtSignal(str)
 

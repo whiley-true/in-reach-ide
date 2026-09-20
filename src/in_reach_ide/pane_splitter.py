@@ -41,7 +41,7 @@ class _DragHandle(QWidget):
     Reports the *total* pixel delta since the press on every move (not an incremental, move-to-move
     one) -- :meth:`PaneSplitter._on_dragged` applies each one against the sizes captured once at
     press time, the same anchor-at-press-not-at-last-position technique
-    :class:`~in_reach.ide.editor._Minimap`'s own drag handling already uses, so rounding never
+    :class:`~in_reach_ide.editor._Minimap`'s own drag handling already uses, so rounding never
     compounds across a long drag.
     """
 

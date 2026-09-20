@@ -1,6 +1,6 @@
 from PyQt6.QtWidgets import QLabel
 
-from in_reach.ide.collapsible_section import CollapsibleSection
+from in_reach_ide.collapsible_section import CollapsibleSection
 
 
 def test_starts_collapsed_by_default(qtbot) -> None:

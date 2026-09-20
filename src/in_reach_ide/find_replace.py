@@ -6,7 +6,7 @@ result (with shortcut for shift + enter), next match with enter, find in selecti
 shortcut escape)[; r]eplace should have preserve case, replace (enter) replace all (ctrl + shift +
 enter) (we want to mimic vsocde essentially)").
 
-One instance lives inside each :class:`~in_reach.ide.editor.TextEditorWidget` (see that module's
+One instance lives inside each :class:`~in_reach_ide.editor.TextEditorWidget` (see that module's
 own layout), operating on that tab's own real ``QPlainTextEdit``/``QTextDocument`` -- never shown
 until :meth:`FindReplaceBar.open` is called (MainWindow's own Ctrl+F/Ctrl+R shortcuts, routed
 through whichever tab is currently active), and collapses back to taking no layout space at all
@@ -30,8 +30,8 @@ from PyQt6.QtWidgets import (
     QWidget,
 )
 
-from in_reach.app.project_search import compile_search_pattern, preserve_case
-from in_reach.ide import icons
+from in_reach_ide.project_search import compile_search_pattern, preserve_case
+from in_reach_ide import icons
 
 _BAR_STYLE = (
     "QWidget#findReplaceBar { background-color: palette(alternate-base);"

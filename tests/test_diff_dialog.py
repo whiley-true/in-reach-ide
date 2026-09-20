@@ -1,8 +1,8 @@
 from pathlib import Path
 
 from in_reach.app import vcs
-from in_reach.ide.diff_dialog import DiffDialog
-from in_reach.ide.diff_view import DiffViewWidget
+from in_reach_ide.diff_dialog import DiffDialog
+from in_reach_ide.diff_view import DiffViewWidget
 
 
 def _project_with_a_and_b_changed(tmp_path: Path) -> Path:

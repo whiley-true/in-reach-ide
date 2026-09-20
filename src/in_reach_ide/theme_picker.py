@@ -1,6 +1,6 @@
 """A row of Light/Dark/Whiley toggle buttons that live-apply the chosen theme app-wide -- the
 "click a button, apply the theme, keep exactly one checked" mechanism behind the Settings dialog's
-Theme tab (:mod:`in_reach.ide.settings_dialog`), kept as its own module rather than inlined there.
+Theme tab (:mod:`in_reach_ide.settings_dialog`), kept as its own module rather than inlined there.
 """
 
 from __future__ import annotations
@@ -10,8 +10,8 @@ from typing import Callable
 from PyQt6.QtCore import Qt
 from PyQt6.QtWidgets import QApplication, QHBoxLayout, QPushButton, QWidget
 
-from in_reach.ide import theme as theme_module
-from in_reach.ide.theme import Theme
+from in_reach_ide import theme as theme_module
+from in_reach_ide.theme import Theme
 
 THEME_NAMES = ("Light", "Dark", "Whiley")
 

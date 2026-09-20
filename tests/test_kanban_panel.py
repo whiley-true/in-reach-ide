@@ -1,4 +1,4 @@
-"""Tests for :mod:`in_reach.ide.kanban_panel` (PROMPT.md: "the icon should open the side panel and
+"""Tests for :mod:`in_reach_ide.kanban_panel` (PROMPT.md: "the icon should open the side panel and
 allow the user to choose or create a board and set background colour or custom image")."""
 
 from __future__ import annotations
@@ -9,8 +9,8 @@ from pathlib import Path
 import pytest
 from PyQt6.QtGui import QColor, QPixmap
 
-from in_reach.app.kanban_db import KanbanStore
-from in_reach.ide.kanban_panel import KanbanPanel
+from in_reach_ide.kanban_db import KanbanStore
+from in_reach_ide.kanban_panel import KanbanPanel
 
 
 @pytest.fixture

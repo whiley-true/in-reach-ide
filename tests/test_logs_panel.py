@@ -1,7 +1,7 @@
 import logging
 
 from in_reach.app.logging_setup import LOGGER_NAME
-from in_reach.ide.logs_panel import LogsPanel, _bridge
+from in_reach_ide.logs_panel import LogsPanel, _bridge
 
 
 def _logger() -> logging.Logger:
@@ -83,7 +83,7 @@ def test_only_one_handler_instance_is_ever_attached(qtbot) -> None:
     LogsPanel()
 
     logger = logging.getLogger(LOGGER_NAME)
-    from in_reach.ide.logs_panel import _handler
+    from in_reach_ide.logs_panel import _handler
 
     assert logger.handlers.count(_handler) == 1
 

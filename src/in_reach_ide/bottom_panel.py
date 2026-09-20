@@ -1,7 +1,7 @@
 """The bottom panel: a live "Logs" tab (PROMPT.md: "in the bottom panel please make the first tab
 logs ... please make this a fully fledged logs feature and have all actions log here" -- see
-:mod:`in_reach.ide.logs_panel`), first, then "Problems" (what's wrong with the active script project, each line
-clickable -- see :mod:`in_reach.ide.problems_panel`), followed by a stub tab with no functionality behind it yet.
+:mod:`in_reach_ide.logs_panel`), first, then "Problems" (what's wrong with the active script project, each line
+clickable -- see :mod:`in_reach_ide.problems_panel`), followed by a stub tab with no functionality behind it yet.
 """
 
 from __future__ import annotations
@@ -9,9 +9,9 @@ from __future__ import annotations
 from PyQt6.QtCore import Qt
 from PyQt6.QtWidgets import QTabWidget, QWidget
 
-from in_reach.ide import style
-from in_reach.ide.logs_panel import LogsPanel
-from in_reach.ide.problems_panel import ProblemsPanel
+from in_reach_ide import style
+from in_reach_ide.logs_panel import LogsPanel
+from in_reach_ide.problems_panel import ProblemsPanel
 
 _STUB_TAB_LABELS = ("text3",)
 _PROBLEMS_LABEL = "Problems"

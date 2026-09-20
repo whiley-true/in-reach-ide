@@ -4,14 +4,14 @@ Testing, Playtest, LLM), exactly one of whose views is ever active, switching th
 VSCode-style: clicking the already-active one collapses the sidebar instead of switching -- then,
 pinned at the bottom: a flame status indicator (see :meth:`ActivityBar.set_halo_status`), a help
 icon (still a no-op), and a settings cog, which opens the Settings popout (see
-:class:`~in_reach.ide.settings_dialog.SettingsDialog`; MainWindow owns actually building/showing
+:class:`~in_reach_ide.settings_dialog.SettingsDialog`; MainWindow owns actually building/showing
 it, this bar just emits :attr:`ActivityBar.settings_requested`).
 
 PROMPT.md: "please move the panel ordering so it goes compile, dashboard, then a git symbol
 (stubbed empty panel for now (where we will implement a dulwich gui)), then a bookshelf with the
 label Scripts (also stubbed for now), then rvt, then locations, then search" -- the top icons live
 in a dedicated :class:`_IconStrip` that supports a real mouse-drag reorder
-(:class:`~in_reach.ide.tabs._DragTabBar`'s own pattern, adapted to a vertical icon list instead of
+(:class:`~in_reach_ide.tabs._DragTabBar`'s own pattern, adapted to a vertical icon list instead of
 a horizontal tab strip) and persists the result to the project's own ``.env``
 (``ACTIVITY_BAR_ORDER``), read back on the next launch. Two later passes (PROMPT.md: "please move
 vcs up by default ... please add a map icon for 'Map Files'"; "move documentation to be its own
@@ -19,7 +19,7 @@ panel ... a stubbed entrance for Testing ... a stubbed entry for LLM") added the
 Documentation/Testing/LLM toggles, all stubbed the same placeholder-only way as Scripts. A further
 pass (PROMPT.md: "we are removing locations, and rvt ... please add a button in between Export File
 and View Compiled ... for Launch RVT") retired the RVT launcher icon here (see
-:mod:`in_reach.ide.explorer`'s own "Launch RVT" dashboard button instead) and the Locations toggle
+:mod:`in_reach_ide.explorer`'s own "Launch RVT" dashboard button instead) and the Locations toggle
 entirely, and reordered the remaining icons to compile, dashboard, git, scripts, maps, documentation,
 testing, llm, search. A later pass (PROMPT.md: "please move search magnifying glass to come under
 dashboard ... under documentation please add an icon for Kanban ... please move tests to come
@@ -45,8 +45,8 @@ from PyQt6.QtWidgets import (
 )
 
 from in_reach.app import env_file
-from in_reach.ide import icons
-from in_reach.ide.style import PANEL_RADIUS
+from in_reach_ide import icons
+from in_reach_ide.style import PANEL_RADIUS
 
 # PROMPT.md, across two passes: +15% on the icons alone, then +10% on "the sidebar and its icons"
 # together -- 22 -> 25 -> 28 (icons), 40 -> 44 (buttons), 48 -> 53 (the bar's own width). These are
@@ -207,7 +207,7 @@ def _save_order(env_path: Path | None, order: list[str]) -> None:
 class _IconStrip(QWidget):
     """A vertical run of :class:`QToolButton`\\ s that can be reordered by dragging one onto
     another -- the same "press, then drag once past the OS drag threshold" trigger
-    :class:`~in_reach.ide.tabs._DragTabBar` uses for tab reordering, just vertical and carrying a
+    :class:`~in_reach_ide.tabs._DragTabBar` uses for tab reordering, just vertical and carrying a
     plain string key (this widget doesn't care whether that key names a sidebar view or a plain
     action button) instead of a pane id/tab index pair.
 
@@ -524,7 +524,7 @@ class ActivityBar(QWidget):
         self.setAttribute(Qt.WidgetAttribute.WA_StyledBackground, True)
         self.setObjectName("activityBar")
         # A full rounded/bordered card, matching every other top-level panel -- see
-        # in_reach.ide.style's module docstring. PROMPT.md: "the text help background needs to
+        # in_reach_ide.style's module docstring. PROMPT.md: "the text help background needs to
         # have contrast to the text help colour" -- scoped to #activityBar specifically, not a
         # bare declaration, or every tooltip shown by this bar's own buttons (Dashboard, Git,
         # Compile, ...) would render with #activityBar's own dark background instead of the
@@ -583,7 +583,7 @@ class ActivityBar(QWidget):
         # ... make it a stub entry that should come before locations" -- a real sidebar-view toggle
         # (like Explorer/Search), just with a placeholder view behind it (see MainWindow's own
         # DocumentationPanel wiring), same treatment as Git/Scripts above; replaces the Dashboard's
-        # old Documentation section (see in_reach.ide.explorer's own history).
+        # old Documentation section (see in_reach_ide.explorer's own history).
         self.documentation_button = _bar_button(
             "book", "Documentation (toggle primary sidebar)", checkable=True, checked=False
         )
@@ -744,7 +744,7 @@ class ActivityBar(QWidget):
     def set_apply_enabled(self, enabled: bool) -> None:
         """Whether ``settings/`` currently has changes worth applying -- see
         ``MainWindow._refresh_apply_enabled()``. PROMPT.md: "has small green tick ... when there
-        is nothing to compile" -- see :func:`~in_reach.ide.icons.apply_icon`'s own docstring for
+        is nothing to compile" -- see :func:`~in_reach_ide.icons.apply_icon`'s own docstring for
         the enabled/disabled badge swap this drives."""
         self._apply_enabled = enabled
         self.apply_button.setEnabled(enabled)
@@ -764,8 +764,8 @@ class ActivityBar(QWidget):
     def set_halo_status(self, state: str) -> None:
         """Updates the bottom-pinned flame indicator (PROMPT.md: "a flame icon which can be of
         different states depending on the status of the players halo install and running
-        detection") -- :attr:`~in_reach.ide.icons.STATUS_UNVERIFIED`/``STATUS_VERIFIED``/
-        ``STATUS_RUNNING``, see :func:`~in_reach.ide.icons.status_icon`'s own docstring for what
+        detection") -- :attr:`~in_reach_ide.icons.STATUS_UNVERIFIED`/``STATUS_VERIFIED``/
+        ``STATUS_RUNNING``, see :func:`~in_reach_ide.icons.status_icon`'s own docstring for what
         each looks like. MainWindow re-checks and calls this on a timer (PROMPT.md: "it should
         check every .5s") -- this method just applies whatever state it's given.
         """

@@ -1,4 +1,4 @@
-"""Tests for :mod:`in_reach.ide.kanban_dialogs` -- the card editor and the label dialogs (PROMPT.md:
+"""Tests for :mod:`in_reach_ide.kanban_dialogs` -- the card editor and the label dialogs (PROMPT.md:
 "add card, title, description, label (edit, delete, make labels) -- mark as done")."""
 
 from __future__ import annotations
@@ -8,9 +8,9 @@ from pathlib import Path
 import pytest
 from PyQt6.QtWidgets import QDialog
 
-from in_reach.app.kanban_db import LABEL_COLORS, KanbanStore
-from in_reach.ide import kanban_dialogs
-from in_reach.ide.kanban_dialogs import CardDialog, LabelEditDialog, LabelsDialog
+from in_reach_ide.kanban_db import LABEL_COLORS, KanbanStore
+from in_reach_ide import kanban_dialogs
+from in_reach_ide.kanban_dialogs import CardDialog, LabelEditDialog, LabelsDialog
 
 
 @pytest.fixture

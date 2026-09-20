@@ -1,6 +1,6 @@
 import json
 
-from in_reach.ide.json_position import find_value_span, find_value_spans
+from in_reach_ide.json_position import find_value_span, find_value_spans
 
 
 def test_finds_a_top_level_string_field() -> None:

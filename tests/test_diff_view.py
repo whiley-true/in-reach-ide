@@ -1,6 +1,6 @@
 import pytest
 
-from in_reach.ide.diff_view import DiffViewWidget, _align
+from in_reach_ide.diff_view import DiffViewWidget, _align
 
 
 def test_identical_lines_are_all_equal_with_no_padding() -> None:

@@ -2,7 +2,7 @@
 colourings").
 
 A fixed palette rather than a theme-derived one -- same call already made for the JSON file icon's
-own hardcoded yellow (see :mod:`in_reach.ide.file_icons`) -- picked from VS Code's own default
+own hardcoded yellow (see :mod:`in_reach_ide.file_icons`) -- picked from VS Code's own default
 JSON color theme (what ``vs_sample.png`` itself shows), just switched between a light-background
 and dark-background variant of it since two of this app's three shipped themes (Dark, Whiley) sit
 on a dark base. Punctuation (braces/brackets/colons/commas) is deliberately left uncolored, same as

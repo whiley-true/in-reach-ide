@@ -1,10 +1,10 @@
 """The bottom panel's "Problems" tab: what is wrong with the active project's script, each line clickable.
 
-Two things feed it (see :class:`~in_reach.ide.main_window.MainWindow`): the checks of a linked script project (the
+Two things feed it (see :class:`~in_reach_ide.main_window.MainWindow`): the checks of a linked script project (the
 project model, linter, allocation and fusion, re-run whenever a file is saved) and the messages a failed Apply got back
 from the compiler -- mapped, for a linked project, to the *source* file and line that produced them.
 
-A :class:`Problem` is plain data, built from a :class:`~in_reach.app.script_project.ProjectDiagnostic` or a
+A :class:`Problem` is plain data, built from an :class:`in_reach.api.Diagnostic` or a
 :class:`~in_reach.app.rvt.compile.BuildMessage` by the ``problems_from_*`` helpers here, so the panel itself knows
 nothing about either.
 """
@@ -41,15 +41,15 @@ def _resolve(folder: Path, file: str, relative_to: str = "script") -> Path | Non
 
 
 def problems_from_diagnostics(folder: Path, diagnostics) -> list[Problem]:
-    """A linked project's :class:`~in_reach.app.script_project.ProjectDiagnostic`s (their files are relative to
-    ``script/``, and may climb out of it -- ``../settings/script_settings.json``)."""
+    """A script project's :class:`in_reach.api.Diagnostic`s (their files are relative to ``script/``, and may climb out
+    of it -- ``../settings/script_settings.json``)."""
     return [
         Problem(
             severity=d.severity,
             message=f"{d.message} ({d.hint})" if d.hint else d.message,
             path=_resolve(folder, d.file),
             line=d.line,
-            column=d.col + 1 if d.line else 0,
+            column=d.column,
             code=d.code,
         )
         for d in diagnostics

@@ -1,0 +1,34 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "in-reach-ide"
+version = "0.1.0"
+description = "A desktop IDE for Halo: Reach Megalo game variants, built on in-reach."
+readme = "README.md"
+requires-python = ">=3.12"
+license = { file = "LICENSE" }
+authors = [{ name = "Whiley True", email = "inreach.python@gmail.com" }]
+dependencies = [
+    # The core library and CLI, which carries the native module. The IDE calls only in_reach.api (plus the
+    # framework-agnostic in_reach.app modules it was built on); API_VERSION says when that changed incompatibly.
+    "in-reach>=0.3.0,<0.4",
+    "PyQt6==6.11.0",
+]
+
+[project.optional-dependencies]
+dev = ["pytest==8.4.2", "pytest-qt==4.5.0"]
+
+[project.scripts]
+in-reach-ide = "in_reach_ide.cli:main"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.setuptools.package-data]
+in_reach_ide = [
+    "themes/*.json",
+    "assets/*.svg",
+    "assets/*.png",
+]

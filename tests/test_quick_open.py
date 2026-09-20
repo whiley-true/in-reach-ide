@@ -1,6 +1,6 @@
 from pathlib import Path
 
-from in_reach.app import quick_open
+from in_reach_ide import quick_open
 
 
 def test_list_project_files_returns_every_file_sorted_by_relative_path(tmp_path: Path) -> None:

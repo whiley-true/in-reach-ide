@@ -1,8 +1,8 @@
 """Stub primary-sidebar view behind the activity bar's book icon (PROMPT.md: "move documentation to
 be its own panel. it should have a symbol of a book ... make it a stub entry that should come
 before locations") -- replaces the Dashboard's old Documentation section (see
-:mod:`in_reach.ide.explorer`'s own history). No real content yet -- same placeholder-only treatment
-as :mod:`in_reach.ide.scripts_panel`.
+:mod:`in_reach_ide.explorer`'s own history). No real content yet -- same placeholder-only treatment
+as :mod:`in_reach_ide.scripts_panel`.
 """
 
 from __future__ import annotations

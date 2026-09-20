@@ -1,5 +1,5 @@
-"""Tests for :mod:`in_reach.ide.notepad` -- the Dashboard's Notepad box -- and its placement in
-:class:`~in_reach.ide.explorer.ExplorerPanel` (PROMPT.md: "in dashboard please add a 'Notepad'
+"""Tests for :mod:`in_reach_ide.notepad` -- the Dashboard's Notepad box -- and its placement in
+:class:`~in_reach_ide.explorer.ExplorerPanel` (PROMPT.md: "in dashboard please add a 'Notepad'
 section that should be box at the bottom that loads the contents of a notepad (with line nums)")."""
 
 from __future__ import annotations
@@ -8,8 +8,8 @@ from pathlib import Path
 
 import pytest
 
-from in_reach.ide.explorer import ExplorerPanel
-from in_reach.ide.notepad import AUTOSAVE_DELAY_MS, NOTEPAD_PLACEHOLDER, NotepadBox, NotepadEdit
+from in_reach_ide.explorer import ExplorerPanel
+from in_reach_ide.notepad import AUTOSAVE_DELAY_MS, NOTEPAD_PLACEHOLDER, NotepadBox, NotepadEdit
 
 
 @pytest.fixture

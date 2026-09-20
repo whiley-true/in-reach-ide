@@ -1,6 +1,6 @@
 from pathlib import Path
 
-from in_reach.ide import schema_check
+from in_reach_ide import schema_check
 
 
 def test_a_file_with_no_known_schema_is_never_checked() -> None:

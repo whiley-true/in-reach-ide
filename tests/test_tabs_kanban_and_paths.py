@@ -7,9 +7,9 @@ from pathlib import Path
 
 import pytest
 
-from in_reach.app.kanban_db import KanbanStore
-from in_reach.ide.kanban_board import KanbanBoardView
-from in_reach.ide.main_window import MainWindow
+from in_reach_ide.kanban_db import KanbanStore
+from in_reach_ide.kanban_board import KanbanBoardView
+from in_reach_ide.main_window import MainWindow
 
 
 @pytest.fixture

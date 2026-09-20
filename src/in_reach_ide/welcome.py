@@ -6,8 +6,8 @@ Walkthroughs down the right.
 
 Everything on the page is a view of one file -- the project's ``.in-reach/.env``. The verify
 quadrant's "N of 12 verified" count is a summary of that same file, not a checklist of its own --
-see :class:`~in_reach.ide.verify_dialog.VerifyDialog` for the actual step-by-step run, and
-:class:`~in_reach.ide.settings_info_dialog.SettingsInfoDialog` (its own "What is this?" button) for
+see :class:`~in_reach_ide.verify_dialog.VerifyDialog` for the actual step-by-step run, and
+:class:`~in_reach_ide.settings_info_dialog.SettingsInfoDialog` (its own "What is this?" button) for
 why any of this is asked for in the first place. The "New Project from ..." actions enable because
 the variant-folder steps behind them are verified; Recent is a key of its own. That's why
 :meth:`WelcomeTab.refresh` is all it takes to bring the whole page back in sync after a verify run,
@@ -36,11 +36,12 @@ from PyQt6.QtWidgets import (
 )
 
 import in_reach
-from in_reach.app import env_file, new_project, project, recent, system_verify
-from in_reach.ide import file_dialogs, icons
-from in_reach.ide.new_project_dialog import NewProjectDialog
-from in_reach.ide.settings_info_dialog import SettingsInfoDialog
-from in_reach.ide.verify_dialog import VerifyDialog
+from in_reach.app import env_file, new_project, project, system_verify
+from in_reach_ide import recent
+from in_reach_ide import file_dialogs, icons
+from in_reach_ide.new_project_dialog import NewProjectDialog
+from in_reach_ide.settings_info_dialog import SettingsInfoDialog
+from in_reach_ide.verify_dialog import VerifyDialog
 
 _ICON_SIZE = 16
 
@@ -93,7 +94,7 @@ class WelcomeTab(QWidget):
         outer.setContentsMargins(0, 0, 0, 0)
 
         # Scrollable rather than laid out directly on the tab: at the default 150% zoom (see
-        # in_reach.ide.zoom), this page's natural height can exceed a non-maximized window's
+        # in_reach_ide.zoom), this page's natural height can exceed a non-maximized window's
         # available space -- without a scroll area, Qt's own layout engine responds by shrinking
         # every row below its natural size to force a fit, which reads as the Start/Verify
         # quadrants' text overlapping into an unreadable smear rather than as a scrollbar

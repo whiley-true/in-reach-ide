@@ -13,11 +13,11 @@ from pathlib import Path
 from PyQt6.QtWidgets import QApplication
 
 from in_reach.app import env_file, logging_setup
-from in_reach.ide import icons
-from in_reach.ide import theme as theme_module
-from in_reach.ide import zoom as zoom_module
-from in_reach.ide.main_window import MainWindow
-from in_reach.ide.win_native_filter import BlockAccessibilityQueries
+from in_reach_ide import icons
+from in_reach_ide import theme as theme_module
+from in_reach_ide import zoom as zoom_module
+from in_reach_ide.main_window import MainWindow
+from in_reach_ide.win_native_filter import BlockAccessibilityQueries
 
 _ENV_NAME = ".env"
 _WINDOWS_APP_USER_MODEL_ID = "InReach.IDE"

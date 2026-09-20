@@ -5,10 +5,10 @@ from PyQt6.QtCore import QMimeData, Qt
 from PyQt6.QtGui import QPalette, QTextCursor, QTextFormat
 from PyQt6.QtWidgets import QApplication
 
-from in_reach.app import indent_settings
-from in_reach.ide import indent_state
-from in_reach.ide.editor import TextEditorWidget, _indent_level
-from in_reach.ide.json_highlighter import JsonSyntaxHighlighter
+from in_reach_ide import indent_settings
+from in_reach_ide import indent_state
+from in_reach_ide.editor import TextEditorWidget, _indent_level
+from in_reach_ide.json_highlighter import JsonSyntaxHighlighter
 
 
 @pytest.fixture(autouse=True)
@@ -853,7 +853,7 @@ def test_other_script_settings_json_fields_stay_editable(qtbot, tmp_path) -> Non
 
 
 def test_resize_positions_the_minimap_along_the_right_edge(qtbot) -> None:
-    from in_reach.ide.editor import _MINIMAP_WIDTH
+    from in_reach_ide.editor import _MINIMAP_WIDTH
 
     editor = TextEditorWidget()
     qtbot.addWidget(editor)

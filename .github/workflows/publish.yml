@@ -1,0 +1,66 @@
+name: Publish to PyPI
+
+# Runs when a GitHub Release is published (auto-release.yml does that on merging a release/vX.Y.Z PR into main).
+#
+# This package is pure Python: one wheel and one sdist. Nothing is uploaded until the tests pass on every supported
+# Python and check_dist.py agrees that dist/ is exactly one wheel and one sdist for the release tag -- a PyPI version
+# can't be uploaded again after a partial publish.
+
+on:
+  release:
+    types: [published]
+
+jobs:
+  test:
+    runs-on: windows-latest
+    strategy:
+      fail-fast: true
+      matrix:
+        python-version: ["3.12", "3.13", "3.14"]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+      - name: Install the package and its test dependencies
+        run: python -m pip install -e ".[dev]"
+      - name: Run tests
+        run: python -m pytest -q
+
+  build:
+    needs: test
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.14"
+      - name: Build the wheel and the source distribution
+        run: |
+          python -m pip install --upgrade build
+          python -m build
+      - uses: actions/upload-artifact@v4
+        with:
+          name: dist
+          path: dist/*
+
+  publish:
+    needs: build
+    runs-on: ubuntu-latest
+    environment: pypi
+    permissions:
+      id-token: write
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          sparse-checkout: .github/scripts
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.14"
+      - uses: actions/download-artifact@v4
+        with:
+          name: dist
+          path: dist/
+      - name: Check dist/ is exactly the release, before uploading anything
+        run: python .github/scripts/check_dist.py dist --tag "${{ github.event.release.tag_name }}"
+      - uses: pypa/gh-action-pypi-publish@release/v1

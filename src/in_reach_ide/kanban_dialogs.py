@@ -2,11 +2,11 @@
 make labels) -- mark as done"): :class:`CardDialog` (edit one card), :class:`LabelsDialog` (make/edit/
 delete a board's labels) and :class:`LabelEditDialog` (one label's name + colour).
 
-Every dialog applies its own changes straight to the :class:`~in_reach.app.kanban_db.KanbanStore`
+Every dialog applies its own changes straight to the :class:`~in_reach_ide.kanban_db.KanbanStore`
 when accepted -- the board view redraws itself off the store's own change notifications, so a
 dialog never needs to hand anything back. Anything that would pop a further modal (a confirmation,
 a colour picker) goes through a small, separately-named method so tests can substitute it, same
-convention as ``ask_confirm_replace`` in :mod:`in_reach.ide.search_panel`.
+convention as ``ask_confirm_replace`` in :mod:`in_reach_ide.search_panel`.
 """
 
 from __future__ import annotations
@@ -31,7 +31,7 @@ from PyQt6.QtWidgets import (
     QWidget,
 )
 
-from in_reach.app.kanban_db import LABEL_COLORS, KanbanStore, Label
+from in_reach_ide.kanban_db import LABEL_COLORS, KanbanStore, Label
 
 _SWATCH_SIZE = 16
 
@@ -51,7 +51,7 @@ def pick_color(parent: QWidget | None, initial: str | None) -> str | None:
 
 
 class LabelEditDialog(QDialog):
-    """One label's name and colour -- a row of the preset :data:`~in_reach.app.kanban_db.
+    """One label's name and colour -- a row of the preset :data:`~in_reach_ide.kanban_db.
     LABEL_COLORS` swatches plus "Custom..." for anything else."""
 
     def __init__(

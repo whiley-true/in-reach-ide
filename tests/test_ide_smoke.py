@@ -7,15 +7,15 @@ from PyQt6.QtGui import QColor, QPalette
 from PyQt6.QtWidgets import QApplication, QMessageBox, QTabWidget
 
 from in_reach.app.rvt import rvt_bridge
-from in_reach.ide import app as ide_app
-from in_reach.ide import icons, style, theme
-from in_reach.ide import zoom as zoom_module
-from in_reach.ide.activity_bar import ActivityBar
-from in_reach.ide.editor import TextEditorWidget
-from in_reach.ide.main_window import _ICON_SIZE, _SIDEBAR_DEFAULT_WIDTH, MainWindow
-from in_reach.ide.pane_splitter import PaneSplitter
-from in_reach.ide.tabs import _MAX_H_SPLITS, _MAX_V_SPLITS
-from in_reach.ide.welcome import WelcomeTab
+from in_reach_ide import app as ide_app
+from in_reach_ide import icons, style, theme
+from in_reach_ide import zoom as zoom_module
+from in_reach_ide.activity_bar import ActivityBar
+from in_reach_ide.editor import TextEditorWidget
+from in_reach_ide.main_window import _ICON_SIZE, _SIDEBAR_DEFAULT_WIDTH, MainWindow
+from in_reach_ide.pane_splitter import PaneSplitter
+from in_reach_ide.tabs import _MAX_H_SPLITS, _MAX_V_SPLITS
+from in_reach_ide.welcome import WelcomeTab
 
 _NEEDS_NATIVE_RVT = pytest.mark.skipif(
     not rvt_bridge.is_available(), reason="native _reachvarianttool extension not available on this platform"
@@ -100,7 +100,7 @@ def test_activity_bar_checked_buttons_get_a_grey_border_not_a_pale_fill(qtbot) -
     # undesirable, they should have a grey boarder when selected instead" -- overrides Fusion's
     # own default :checked fill (which follows the active theme's highlight color) with a fixed
     # grey border, so a checked view icon looks the same regardless of theme.
-    from in_reach.ide.activity_bar import _CHECKED_BORDER_COLOR
+    from in_reach_ide.activity_bar import _CHECKED_BORDER_COLOR
 
     bar = ActivityBar()
     qtbot.addWidget(bar)
@@ -134,7 +134,7 @@ def test_status_bar_background_stylesheet_is_scoped_not_bare(window: MainWindow)
 
 
 def test_app_level_stylesheet_carries_the_shared_tooltip_style(qtbot) -> None:
-    from in_reach.ide import style
+    from in_reach_ide import style
 
     app = QApplication.instance()
     theme.apply_theme(app, "Light")
@@ -332,7 +332,7 @@ def test_sidebar_max_width_is_half_the_screen(window: MainWindow) -> None:
     # _SIDEBAR_MIN_DRAG_WIDTH: an extreme (sub-400px) screen would otherwise let the fraction-of-
     # screen ceiling undercut the minimum width, a self-contradictory min > max -- see
     # _build_primary_sidebar()'s own comment.
-    from in_reach.ide.main_window import _SIDEBAR_MAX_WIDTH_FRACTION, _SIDEBAR_MIN_DRAG_WIDTH
+    from in_reach_ide.main_window import _SIDEBAR_MAX_WIDTH_FRACTION, _SIDEBAR_MIN_DRAG_WIDTH
 
     screen = QApplication.primaryScreen()
     expected = max(_SIDEBAR_MIN_DRAG_WIDTH, screen.availableGeometry().width() // _SIDEBAR_MAX_WIDTH_FRACTION)
@@ -352,7 +352,7 @@ def test_sidebar_min_drag_width_is_a_flat_floor(window: MainWindow) -> None:
     # PROMPT.md: "the side panel needs to be resiziable to be much smaller" -- flat (not
     # fraction-of-screen -- "genuinely narrow" means the same thing on any size screen), unlike
     # the max side.
-    from in_reach.ide.main_window import _SIDEBAR_MIN_DRAG_WIDTH
+    from in_reach_ide.main_window import _SIDEBAR_MIN_DRAG_WIDTH
 
     assert window.primary_sidebar.minimumWidth() == _SIDEBAR_MIN_DRAG_WIDTH
 
@@ -388,7 +388,7 @@ def test_dragging_the_sidebar_to_a_midrange_width_actually_lands_there(
     # main_window.py's own _build_primary_sidebar) even on a narrow CI/headless virtual display,
     # where that ceiling can sit well below a larger "wide" target and silently clamp it -- a
     # failure that has nothing to do with dragging actually working.
-    from in_reach.ide.main_window import _SIDEBAR_MIN_DRAG_WIDTH
+    from in_reach_ide.main_window import _SIDEBAR_MIN_DRAG_WIDTH
 
     target = _SIDEBAR_MIN_DRAG_WIDTH + 50
     assert target < sidebar.maximumWidth()  # would silently invalidate this test otherwise
@@ -772,7 +772,7 @@ def test_apply_button_starts_disabled(qtbot) -> None:
 
 def test_refresh_icon_scale_resizes_the_bar_and_every_button(qtbot) -> None:
     # PROMPT.md: "when zooming in and out the quicklaunch panel and its icons are not resizing".
-    from in_reach.ide.activity_bar import WIDTH, _BUTTON_SIZE
+    from in_reach_ide.activity_bar import WIDTH, _BUTTON_SIZE
 
     bar = ActivityBar()
     qtbot.addWidget(bar)
@@ -790,7 +790,7 @@ def test_refresh_icon_scale_resizes_the_bar_and_every_button(qtbot) -> None:
 def test_explorer_button_is_labeled_and_iconed_as_dashboard(qtbot) -> None:
     # PROMPT.md: "file explorer is renamed to dashboard (and the icon is changed to be a svg of
     # a dashboard)".
-    from in_reach.ide import icons
+    from in_reach_ide import icons
 
     bar = ActivityBar()
     qtbot.addWidget(bar)
@@ -804,7 +804,7 @@ def test_refresh_icon_scale_keeps_the_dashboard_icon_not_the_old_explorer_one(qt
     # Regression guard: refresh_icon_scale() used to re-render every _buttons-dict button's icon
     # from its own dict *key* ("explorer") rather than the icon name actually passed to
     # _bar_button() ("dashboard") -- a zoom change would silently revert the icon.
-    from in_reach.ide import icons
+    from in_reach_ide import icons
 
     bar = ActivityBar()
     qtbot.addWidget(bar)
@@ -829,7 +829,7 @@ def test_refresh_icon_scale_preserves_the_apply_disabled_badge(qtbot) -> None:
 
 
 def test_set_apply_enabled_swaps_the_badge_off_and_on(qtbot) -> None:
-    from in_reach.ide.icons import apply_icon
+    from in_reach_ide.icons import apply_icon
 
     bar = ActivityBar()
     qtbot.addWidget(bar)
@@ -924,7 +924,7 @@ def test_activity_bar_default_icon_order(qtbot) -> None:
 
 def test_activity_bar_loads_a_persisted_order_from_env(qtbot, tmp_path: Path) -> None:
     from in_reach.app import env_file
-    from in_reach.ide.activity_bar import ORDER_ENV_KEY
+    from in_reach_ide.activity_bar import ORDER_ENV_KEY
 
     env_path = tmp_path / ".env"
     env_file.update_env_value(env_path, ORDER_ENV_KEY, "search,explorer,maps,compile")
@@ -957,7 +957,7 @@ def test_activity_bar_ignores_a_stale_persisted_order_gracefully(qtbot, tmp_path
     # real button missing from the saved list (a newly-added icon, or one added after the .env
     # entry was written) is appended rather than just vanishing.
     from in_reach.app import env_file
-    from in_reach.ide.activity_bar import ORDER_ENV_KEY
+    from in_reach_ide.activity_bar import ORDER_ENV_KEY
 
     env_path = tmp_path / ".env"
     env_file.update_env_value(env_path, ORDER_ENV_KEY, "search,not-a-real-icon,rvt,locations")
@@ -992,7 +992,7 @@ def test_activity_bar_with_no_env_path_does_not_persist_reordering(qtbot) -> Non
 
 def test_reordering_the_icon_strip_persists_the_new_order_to_env(qtbot, tmp_path: Path) -> None:
     from in_reach.app import env_file
-    from in_reach.ide.activity_bar import ORDER_ENV_KEY
+    from in_reach_ide.activity_bar import ORDER_ENV_KEY
 
     env_path = tmp_path / ".env"
     bar = ActivityBar(env_path=env_path)
@@ -1005,7 +1005,7 @@ def test_reordering_the_icon_strip_persists_the_new_order_to_env(qtbot, tmp_path
 
 
 def test_icon_strip_drop_reorders_the_dragged_button_to_the_drop_position(qtbot) -> None:
-    from in_reach.ide.activity_bar import _IconStrip
+    from in_reach_ide.activity_bar import _IconStrip
     from PyQt6.QtCore import QMimeData, QPointF
     from PyQt6.QtCore import Qt as QtNS
     from PyQt6.QtGui import QDropEvent
@@ -1046,7 +1046,7 @@ def test_pressing_and_dragging_a_bar_button_past_the_threshold_starts_a_real_dra
     # button's events via an installed event filter instead -- this drives a real press-then-move
     # sequence through that filter (QDrag.exec() itself is mocked out, since it blocks on a real
     # OS drag-and-drop loop that has nothing to drop onto in a test).
-    from in_reach.ide.activity_bar import _IconStrip
+    from in_reach_ide.activity_bar import _IconStrip
     from PyQt6.QtCore import QEvent, QPointF
     from PyQt6.QtGui import QDrag, QMouseEvent
     from PyQt6.QtWidgets import QToolButton
@@ -1093,7 +1093,7 @@ def test_dragging_a_bar_button_sets_a_pixmap_and_hotspot_so_it_tracks_the_cursor
 ) -> None:
     # PROMPT.md: "the buttons should drag under the cursor to be more visually appealing" --
     # without an explicit pixmap/hotspot QDrag shows no representation of the dragged icon at all.
-    from in_reach.ide.activity_bar import _IconStrip
+    from in_reach_ide.activity_bar import _IconStrip
     from PyQt6.QtCore import QEvent, QPointF
     from PyQt6.QtGui import QDrag, QMouseEvent
     from PyQt6.QtWidgets import QToolButton
@@ -1148,7 +1148,7 @@ def test_dragging_a_bar_button_sets_a_pixmap_and_hotspot_so_it_tracks_the_cursor
 
 def test_the_pinned_compile_button_cannot_be_dragged(qtbot, monkeypatch: pytest.MonkeyPatch) -> None:
     # PROMPT.md: "the compile icon should be stuck to the top".
-    from in_reach.ide.activity_bar import _IconStrip
+    from in_reach_ide.activity_bar import _IconStrip
     from PyQt6.QtCore import QEvent, QPointF
     from PyQt6.QtGui import QDrag, QMouseEvent
     from PyQt6.QtWidgets import QToolButton
@@ -1189,7 +1189,7 @@ def test_the_pinned_compile_button_cannot_be_dragged(qtbot, monkeypatch: pytest.
 
 
 def test_dropping_onto_the_pinned_button_never_lands_ahead_of_it(qtbot) -> None:
-    from in_reach.ide.activity_bar import _IconStrip
+    from in_reach_ide.activity_bar import _IconStrip
     from PyQt6.QtCore import QMimeData, QPointF
     from PyQt6.QtCore import Qt as QtNS
     from PyQt6.QtGui import QDropEvent
@@ -1218,7 +1218,7 @@ def test_dropping_onto_the_pinned_button_never_lands_ahead_of_it(qtbot) -> None:
 def test_icons_that_do_not_fit_collapse_behind_an_overflow_button(qtbot) -> None:
     # PROMPT.md: "the side panel icons are overlaying on each other becoming unreadable ...
     # instead we want ... icons ... collapsed into a ... icon which opens a popout window".
-    from in_reach.ide.activity_bar import _IconStrip
+    from in_reach_ide.activity_bar import _IconStrip
     from PyQt6.QtWidgets import QToolButton
 
     strip = _IconStrip()
@@ -1246,7 +1246,7 @@ def test_icons_that_do_not_fit_collapse_behind_an_overflow_button(qtbot) -> None
 
 
 def test_overflow_button_menu_lists_hidden_icons_and_clicking_one_activates_it(qtbot) -> None:
-    from in_reach.ide.activity_bar import _IconStrip
+    from in_reach_ide.activity_bar import _IconStrip
     from PyQt6.QtWidgets import QToolButton
 
     strip = _IconStrip()
@@ -1339,7 +1339,7 @@ def test_activity_bar_icons_stay_packed_at_the_top_when_the_strip_has_spare_room
 
 def test_adjust_zoom_resizes_the_activity_bar(window: MainWindow, tmp_path: Path) -> None:
     from in_reach.app import project
-    from in_reach.ide.activity_bar import WIDTH
+    from in_reach_ide.activity_bar import WIDTH
 
     window.root_dir = tmp_path
     project.get_project_dir(tmp_path).mkdir(parents=True)
@@ -2357,7 +2357,7 @@ def test_vcs_merge_branch_with_no_project_open_is_a_no_op(window: MainWindow) ->
 def test_vcs_compare_opens_a_diff_dialog_listing_the_changed_files(
     project_window: MainWindow, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    from in_reach.ide.diff_dialog import DiffDialog
+    from in_reach_ide.diff_dialog import DiffDialog
 
     folder, vcs = _make_vcs_project(tmp_path)
     project_window._on_project_opened(folder)
@@ -2381,7 +2381,7 @@ def test_vcs_compare_opens_a_diff_dialog_listing_the_changed_files(
 def test_vcs_open_diff_opens_a_diff_view_tab_for_the_uncommitted_change(
     project_window: MainWindow, tmp_path: Path
 ) -> None:
-    from in_reach.ide.diff_view import DiffViewWidget
+    from in_reach_ide.diff_view import DiffViewWidget
 
     folder, vcs = _make_vcs_project(tmp_path)
     project_window._on_project_opened(folder)
@@ -2407,7 +2407,7 @@ def test_vcs_open_diff_with_no_project_open_is_a_no_op(window: MainWindow) -> No
 def test_clicking_a_changed_file_in_the_git_panel_opens_its_diff_tab(
     project_window: MainWindow, tmp_path: Path
 ) -> None:
-    from in_reach.ide.diff_view import DiffViewWidget
+    from in_reach_ide.diff_view import DiffViewWidget
 
     folder, vcs = _make_vcs_project(tmp_path)
     project_window._on_project_opened(folder)
@@ -2651,7 +2651,7 @@ def test_vcs_commit_selected_with_no_project_open_is_a_no_op(window: MainWindow)
 
 
 def test_vcs_open_commit_diff_opens_a_unified_diff_tab(project_window: MainWindow, tmp_path: Path) -> None:
-    from in_reach.ide.unified_diff_view import UnifiedDiffViewWidget
+    from in_reach_ide.unified_diff_view import UnifiedDiffViewWidget
 
     folder, vcs = _make_vcs_project(tmp_path)
     project_window._on_project_opened(folder)
@@ -2706,7 +2706,7 @@ def test_vcs_open_commit_file_with_no_project_open_is_a_no_op(window: MainWindow
 def test_vcs_compare_labels_a_stamp_ref_with_its_message(
     project_window: MainWindow, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    from in_reach.ide.diff_dialog import DiffDialog
+    from in_reach_ide.diff_dialog import DiffDialog
 
     folder, vcs = _make_vcs_project(tmp_path)
     project_window._on_project_opened(folder)
@@ -2855,7 +2855,7 @@ def test_restore_snapshot_command_lists_stamps_and_autosaves_and_restores(
 def test_compare_command_offers_a_two_level_pick_and_opens_the_diff_dialog(
     project_window: MainWindow, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    from in_reach.ide.diff_dialog import DiffDialog
+    from in_reach_ide.diff_dialog import DiffDialog
 
     folder, vcs = _make_vcs_project(tmp_path)
     project_window._on_project_opened(folder)
@@ -2912,7 +2912,7 @@ def test_the_dashboard_notepad_loads_the_projects_notes_file(project_window: Mai
 
 
 def test_open_notepad_in_editor_opens_notes_txt_in_a_tab(project_window: MainWindow, tmp_path: Path) -> None:
-    from in_reach.ide.editor import TextEditorWidget
+    from in_reach_ide.editor import TextEditorWidget
 
     folder = _open_project_with_notes(project_window, tmp_path)
 
@@ -3341,8 +3341,9 @@ def test_a_rename_refreshes_the_open_welcome_tabs_recent_list(
 ) -> None:
     # PROMPT.md: "when a project is renamed, it needs to be renamed in recents in dropdown and in
     # the welcome window".
-    from in_reach.app import project, recent
-    from in_reach.ide.welcome import WelcomeTab
+    from in_reach.app import project
+    from in_reach_ide import recent
+    from in_reach_ide.welcome import WelcomeTab
 
     folder = _make_project_with_settings(tmp_path)
     (folder / "settings" / "settings.json").write_text('{"meta": {"title": "Old Title"}}', encoding="utf-8")
@@ -3365,7 +3366,8 @@ def test_a_rename_refreshes_the_open_welcome_tabs_recent_list(
 def test_a_rename_shows_the_new_title_in_open_recent_next_time_its_opened(
     project_window: MainWindow, tmp_path: Path
 ) -> None:
-    from in_reach.app import project, recent
+    from in_reach.app import project
+    from in_reach_ide import recent
 
     folder = _make_project_with_settings(tmp_path)
     (folder / "settings" / "settings.json").write_text('{"meta": {"title": "New Title"}}', encoding="utf-8")
@@ -3436,7 +3438,7 @@ def test_clicking_apply_shows_an_error_dialog_and_leaves_the_button_alone_on_fai
     monkeypatch.setattr(apply_settings, "apply_settings_changes", lambda project_dir, target_folder: failure)
     shown: list[str] = []
     monkeypatch.setattr(
-        "in_reach.ide.main_window.QMessageBox.critical", lambda *a, **k: shown.append(a[2])
+        "in_reach_ide.main_window.QMessageBox.critical", lambda *a, **k: shown.append(a[2])
     )
 
     project_window.activity_bar.apply_button.click()
@@ -3663,7 +3665,7 @@ def test_launch_rvt_save_and_continue_saves_the_dirty_tab_and_proceeds(
 ) -> None:
     from in_reach.app import apply_settings, new_project, project, rvt_launcher
     from in_reach.app.rvt.compile import BuildResult
-    from in_reach.ide import tabs as tabs_module
+    from in_reach_ide import tabs as tabs_module
 
     window.root_dir = tmp_path
     project_dir = project.get_project_dir(tmp_path)
@@ -4154,7 +4156,7 @@ def test_launch_rvt_reports_a_launch_failure_rather_than_crashing(
     monkeypatch.setattr(rvt_launcher, "launch_rvt", _raise)
     shown: list[str] = []
     monkeypatch.setattr(
-        "in_reach.ide.main_window.QMessageBox.critical", lambda *a, **k: shown.append(a[2])
+        "in_reach_ide.main_window.QMessageBox.critical", lambda *a, **k: shown.append(a[2])
     )
 
     window.explorer_panel.rvt_button.click()
@@ -4404,7 +4406,7 @@ def test_status_bar_reports_no_edges_when_maximized(window: MainWindow) -> None:
 
 
 def test_status_bar_set_cursor_info_shows_ln_col_and_spaces(window: MainWindow) -> None:
-    from in_reach.app import indent_settings
+    from in_reach_ide import indent_settings
 
     status_bar = window.status_bar
     on_cursor = []
@@ -4434,7 +4436,7 @@ def test_status_bar_set_cursor_info_shows_ln_col_and_spaces(window: MainWindow) 
 def test_status_bar_set_cursor_info_shows_tabs_when_that_is_the_live_style(window: MainWindow) -> None:
     """PROMPT.md: the bottom bar's indentation segment should represent what is live in the
     document right now -- it used to read "Spaces: N" unconditionally, even with Tabs active."""
-    from in_reach.app import indent_settings
+    from in_reach_ide import indent_settings
 
     window.status_bar.set_cursor_info(
         1, 1, 0, indent_settings.STYLE_TABS, 4, on_cursor_click=lambda: None, on_spaces_click=lambda: None
@@ -4444,7 +4446,7 @@ def test_status_bar_set_cursor_info_shows_tabs_when_that_is_the_live_style(windo
 
 
 def test_status_bar_set_cursor_info_omits_selected_count_with_no_selection(window: MainWindow) -> None:
-    from in_reach.app import indent_settings
+    from in_reach_ide import indent_settings
 
     window.status_bar.set_cursor_info(
         1, 1, 0, indent_settings.STYLE_SPACES, 4, on_cursor_click=lambda: None, on_spaces_click=lambda: None
@@ -4454,7 +4456,7 @@ def test_status_bar_set_cursor_info_omits_selected_count_with_no_selection(windo
 
 
 def test_status_bar_clear_cursor_info_hides_both_segments(window: MainWindow) -> None:
-    from in_reach.app import indent_settings
+    from in_reach_ide import indent_settings
 
     window.status_bar.set_cursor_info(
         1, 1, 0, indent_settings.STYLE_SPACES, 4, on_cursor_click=lambda: None, on_spaces_click=lambda: None
@@ -4644,8 +4646,8 @@ def test_convert_indentation_with_a_selection_only_touches_the_selected_lines(
     project_window: MainWindow, tmp_path: Path
 ) -> None:
     from PyQt6.QtGui import QTextCursor
-    from in_reach.app import indent_settings
-    from in_reach.ide import indent_state
+    from in_reach_ide import indent_settings
+    from in_reach_ide import indent_state
 
     indent_state.set_indent(indent_settings.STYLE_SPACES, 4)
     path = tmp_path / "notes.txt"
@@ -4671,8 +4673,8 @@ def test_detect_indentation_action_updates_the_live_state_and_persists_it(
     """PROMPT.md: replaces the old manual "Indent using spaces"/"Indent using tabs" commands with
     "Detect Indentation from Content" -- exercised here end to end through the active editor's own
     (tab-indented) text, same as the manual commands used to be tested."""
-    from in_reach.app import indent_settings
-    from in_reach.ide import indent_state
+    from in_reach_ide import indent_settings
+    from in_reach_ide import indent_state
 
     path = tmp_path / "notes.txt"
     path.write_text("\tfoo\n\tbar\n", encoding="utf-8")
@@ -4688,8 +4690,8 @@ def test_detect_indentation_action_updates_the_live_state_and_persists_it(
 
 
 def test_detect_indentation_action_is_a_no_op_with_no_active_editor(project_window: MainWindow) -> None:
-    from in_reach.app import indent_settings
-    from in_reach.ide import indent_state
+    from in_reach_ide import indent_settings
+    from in_reach_ide import indent_state
 
     indent_state.set_indent(indent_settings.DEFAULT_INDENT_STYLE, indent_settings.DEFAULT_INDENT_WIDTH)
 
@@ -4963,7 +4965,7 @@ def test_llm_button_switches_the_sidebar_to_its_own_panel(
 def test_settings_cog_opens_the_settings_dialog(
     window: MainWindow, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    from in_reach.ide.settings_dialog import SettingsDialog
+    from in_reach_ide.settings_dialog import SettingsDialog
 
     opened = []
     monkeypatch.setattr(SettingsDialog, "exec", lambda self: opened.append(self) or 0)
@@ -4977,7 +4979,7 @@ def test_settings_cog_opens_the_settings_dialog(
 def test_settings_dialog_theme_change_updates_the_main_window_chrome(
     window: MainWindow, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    from in_reach.ide.settings_dialog import SettingsDialog
+    from in_reach_ide.settings_dialog import SettingsDialog
 
     captured: list[SettingsDialog] = []
 
@@ -5328,7 +5330,7 @@ def test_halo_mcc_verified_reflects_the_project_root_env(project_window: MainWin
 
 def test_launch_mcc_from_menu_is_a_no_op_unless_verified(window: MainWindow, monkeypatch) -> None:
     called = []
-    monkeypatch.setattr("in_reach.ide.main_window.mcc_launcher.launch_mcc", lambda: called.append(True))
+    monkeypatch.setattr("in_reach_ide.main_window.mcc_launcher.launch_mcc", lambda: called.append(True))
 
     window.launch_mcc_from_menu()
 
@@ -5341,7 +5343,7 @@ def test_launch_mcc_from_menu_launches_once_verified(project_window: MainWindow,
     env_path = system_verify.env_path_for(project.get_project_dir(project_window.root_dir))
     env_file.update_env_value(env_path, system_verify.HALO_MCC_KEY, r"C:\Games\MCC")
     called = []
-    monkeypatch.setattr("in_reach.ide.main_window.mcc_launcher.launch_mcc", lambda: called.append(True))
+    monkeypatch.setattr("in_reach_ide.main_window.mcc_launcher.launch_mcc", lambda: called.append(True))
 
     project_window.launch_mcc_from_menu()
 
@@ -5498,7 +5500,8 @@ def test_clicking_a_file_in_the_explorer_panel_opens_it_in_the_active_pane(
 def test_open_folder_adopts_it_as_the_current_project(
     project_window: MainWindow, monkeypatch: pytest.MonkeyPatch, tmp_path: Path
 ) -> None:
-    from in_reach.app import project, recent as recent_module
+    from in_reach.app import project
+    from in_reach_ide import recent as recent_module
 
     folder = tmp_path / "SomeProject"
     folder.mkdir()
@@ -5607,7 +5610,7 @@ def test_open_recent_project_menu_lists_recent_projects_by_title(
         env_project_dir, "Slayer Plus", source_variant=resolve_blank_variant(firefight=False)
     )
     assert warning is None
-    from in_reach.app import recent as recent_module
+    from in_reach_ide import recent as recent_module
 
     recent_module.add_recent(env_project_dir, folder)
 
@@ -5624,7 +5627,7 @@ def test_open_recent_project_menu_lists_recent_projects_by_title(
 def test_save_current_delegates_to_the_active_panes_current_tab(
     project_window: MainWindow, monkeypatch: pytest.MonkeyPatch, tmp_path: Path
 ) -> None:
-    from in_reach.ide.tabs import TabPane
+    from in_reach_ide.tabs import TabPane
 
     pane = project_window.main_panel.active_pane
     project_window.main_panel.new_tab_in(pane)
@@ -5698,7 +5701,7 @@ def test_view_menu_settings_action_opens_the_settings_dialog(
     # menu.addAction(text, slot) doesn't re-resolve a monkeypatched *instance* attribute the way a
     # bound-method connect() might, so patching the window's own method here wouldn't actually be
     # exercised; the real SettingsDialog.exec() call is genuinely modal (blocks) and would hang.
-    from in_reach.ide.settings_dialog import SettingsDialog
+    from in_reach_ide.settings_dialog import SettingsDialog
 
     opened = []
     monkeypatch.setattr(SettingsDialog, "exec", lambda self: opened.append(self) or 0)

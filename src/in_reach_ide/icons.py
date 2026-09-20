@@ -420,7 +420,7 @@ def lock_icon(size: int = 16) -> QIcon:
     have a padlock symbol in the tab and cann[o]t be edited"). A real Unicode lock character, not
     hand-traced SVG path data -- same reasoning as :func:`apply_icon`. Renders in its own full
     color regardless of any painter pen color, same as an emoji anywhere else in this codebase (see
-    :mod:`in_reach.ide.file_icons`'s own glyph icons), so this takes no ``color`` argument.
+    :mod:`in_reach_ide.file_icons`'s own glyph icons), so this takes no ``color`` argument.
     """
     pixmap = QPixmap(size, size)
     pixmap.fill(Qt.GlobalColor.transparent)
@@ -438,7 +438,7 @@ def lock_icon(size: int = 16) -> QIcon:
 #: players halo install and running detection ... just firewood: player has not verified their
 #: install ... after being verified the firewood should have the outline of a flame ... if [Halo:
 #: MCC] is running ... the flame should be filled" -- the activity bar's bottom-pinned Halo status
-#: indicator (see :meth:`~in_reach.ide.activity_bar.ActivityBar.set_halo_status`).
+#: indicator (see :meth:`~in_reach_ide.activity_bar.ActivityBar.set_halo_status`).
 STATUS_UNVERIFIED = "unverified"
 STATUS_VERIFIED = "verified"
 STATUS_RUNNING = "running"

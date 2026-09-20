@@ -1,6 +1,6 @@
 from PyQt6.QtCore import QPoint, Qt
 
-from in_reach.ide.window_resize import RESIZE_MARGIN, cursor_for_edges, resize_edges
+from in_reach_ide.window_resize import RESIZE_MARGIN, cursor_for_edges, resize_edges
 
 _W, _H = 200, 100
 

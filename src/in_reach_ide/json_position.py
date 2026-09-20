@@ -1,12 +1,12 @@
 """Maps a pydantic validation error's ``loc`` path (e.g. ``("meta", "category")``) back to the
 character span in the *original* JSON text that produced it -- what
-:mod:`in_reach.ide.editor`'s live schema-check needs to draw a VS Code-style wavy underline under
+:mod:`in_reach_ide.editor`'s live schema-check needs to draw a VS Code-style wavy underline under
 the actual offending value while the user types (PROMPT.md: "we want it like in vscode, so
 highlighting and error message if schema is incorrect").
 
 A small hand-rolled tokenizer + recursive-descent walk, not a general JSON parser: it's only ever
 called on text :func:`json.loads` has *already* parsed successfully (see
-:func:`in_reach.ide.schema_check.find_errors`), so it doesn't need to validate syntax itself, just
+:func:`in_reach_ide.schema_check.find_errors`), so it doesn't need to validate syntax itself, just
 track offsets while walking a document already known to be well-formed.
 """
 

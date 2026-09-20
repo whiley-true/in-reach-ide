@@ -4,7 +4,7 @@ is a deliberate per-theme brand choice (blue for Light/Dark, red for Whiley), no
 QPalette role.
 
 Also the one widget that actually sits at the frameless window's true bottom edge, so it owns
-bottom/corner edge-resize hover/press detection itself -- see :class:`~in_reach.ide.main_window.
+bottom/corner edge-resize hover/press detection itself -- see :class:`~in_reach_ide.main_window.
 _ResizableBody`'s own docstring for why that widget, which sits directly above this one, does not.
 
 PROMPT.md: "present branch - last stamped - last saved should be showin in the left of the bottom
@@ -12,7 +12,7 @@ bar" -- :meth:`set_vcs_status`/:meth:`clear_vcs_status`'s own ``vcs_label``, ori
 (alongside a centered "<title> (<folder id>)" project label). A later pass (PROMPT.md: "so what we
 have in the middle of the bottom bar, we now want in the quick access bar[;] please then move the
 git information to the middle of the bottom bar") moved that project text into the top bar's own
-Quick Access pill instead (see :meth:`~in_reach.ide.quick_access.QuickAccessBar.set_label`) and
+Quick Access pill instead (see :meth:`~in_reach_ide.quick_access.QuickAccessBar.set_label`) and
 recentered ``vcs_label`` into the slot it vacated, since nothing else shares the strip's left side
 any more.
 
@@ -33,8 +33,8 @@ from PyQt6.QtCore import Qt
 from PyQt6.QtGui import QMouseEvent
 from PyQt6.QtWidgets import QHBoxLayout, QLabel, QWidget
 
-from in_reach.app import indent_settings
-from in_reach.ide.window_resize import cursor_for_edges, resize_edges
+from in_reach_ide import indent_settings
+from in_reach_ide.window_resize import cursor_for_edges, resize_edges
 
 _HEIGHT = 22
 
