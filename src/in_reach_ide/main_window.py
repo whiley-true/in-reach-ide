@@ -35,7 +35,8 @@ from PyQt6.QtWidgets import (
     QWidget,
 )
 
-from in_reach.app import env_file, halo_status, logging_setup, mcc_launcher, new_project, project, rvt_launcher, script_sync, system_verify
+from in_reach.app import env_file, halo_status, logging_setup, mcc_launcher, new_project, project, rvt_launcher, script_sync
+from within_reach import system_verify
 from in_reach_ide import indent_settings, recent
 from in_reach_ide.kanban_db import KanbanStore
 from in_reach_ide import file_dialogs, icons, style
@@ -3182,7 +3183,7 @@ class MainWindow(QWidget):
     def _open_builtin_folder(self, env_key: str) -> None:
         """Handles :attr:`~in_reach_ide.explorer.ExplorerPanel.open_builtin_folder_requested` --
         PROMPT.md's Dashboard "Quick Launch" "Built-in"/"Hot Reload" buttons. Resolves ``env_key``
-        (one of :mod:`in_reach.app.system_verify`'s own checklist keys, e.g. ``STANDARD_VARIANTS_
+        (one of :mod:`within_reach.system_verify`'s own checklist keys, e.g. ``STANDARD_VARIANTS_
         KEY``) against this window's own project-root ``.env`` -- the same one the Welcome tab's
         Verify System Settings flow itself writes to (:class:`~in_reach_ide.verify_dialog.
         VerifyDialog`) -- rather than the active gametype project's own folder, since these are

@@ -11,7 +11,7 @@ see :class:`~in_reach_ide.verify_dialog.VerifyDialog` for the actual step-by-ste
 why any of this is asked for in the first place. The "New Project from ..." actions enable because
 the variant-folder steps behind them are verified; Recent is a key of its own. That's why
 :meth:`WelcomeTab.refresh` is all it takes to bring the whole page back in sync after a verify run,
-a "Clear Entries", or a new project -- see :mod:`in_reach.app.system_verify` for what fills those
+a "Clear Entries", or a new project -- see :mod:`within_reach.system_verify` for what fills those
 keys in.
 """
 
@@ -36,7 +36,8 @@ from PyQt6.QtWidgets import (
 )
 
 import in_reach
-from in_reach.app import env_file, new_project, project, system_verify
+from in_reach.app import env_file, new_project, project
+from within_reach import system_verify
 from in_reach_ide import recent
 from in_reach_ide import file_dialogs, icons
 from in_reach_ide.new_project_dialog import NewProjectDialog

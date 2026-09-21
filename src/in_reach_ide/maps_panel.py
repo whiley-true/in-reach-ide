@@ -16,7 +16,7 @@ from __future__ import annotations
 from PyQt6.QtCore import QEvent, Qt, pyqtSignal
 from PyQt6.QtWidgets import QLabel, QPushButton, QSizePolicy, QToolButton, QVBoxLayout, QWidget
 
-from in_reach.app import system_verify
+from within_reach import system_verify
 
 _UNRESOLVED_TEXT = "Not set -- run Verify System Settings"
 
@@ -80,7 +80,7 @@ class _SlugButton(QPushButton):
 
 
 class MapsPanel(QWidget):
-    #: Emitted with the :mod:`in_reach.app.system_verify` env key of whichever folder was clicked
+    #: Emitted with the :mod:`within_reach.system_verify` env key of whichever folder was clicked
     #: -- the same signal shape (and the same MainWindow slot) as the Dashboard's own Quick Launch
     #: "Built-in" buttons, see :attr:`~in_reach_ide.explorer.ExplorerPanel.
     #: open_builtin_folder_requested`.

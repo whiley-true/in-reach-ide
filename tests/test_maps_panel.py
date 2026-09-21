@@ -9,7 +9,8 @@ from pathlib import Path
 import pytest
 from PyQt6.QtWidgets import QMessageBox
 
-from in_reach.app import env_file, system_verify
+from in_reach.app import env_file
+from within_reach import system_verify
 from in_reach_ide.explorer import ExplorerPanel
 from in_reach_ide.main_window import MainWindow
 from in_reach_ide.maps_panel import SLUGS, MapsPanel

@@ -5,7 +5,7 @@
 `in-reach-ide` is the desktop IDE for Halo: Reach Megalo game variants. It is a PyQt6 application built on the
 [`in-reach`](../in-reach) library and CLI (a separate repo and PyPI package, `in-reach`), which owns everything that isn't
 a widget: the project model, linker, compiler, native `_reachvarianttool` module, shadow VCS, launchers and the command
-line. This package depends on it (`in-reach>=0.3.0,<0.4`) and calls `in_reach.api` plus the framework-agnostic
+line. This package depends on it (`in-reach>=0.3.0,<0.5`) and calls `in_reach.api` plus the framework-agnostic
 `in_reach.app.*` modules; it never reimplements them.
 
 The layering is one-way: **`in_reach` never imports `in_reach_ide`** (its CLI reaches it by name, through
@@ -13,7 +13,10 @@ The layering is one-way: **`in_reach` never imports `in_reach_ide`** (its CLI re
 Windows and the supported `in_reach.api.API_VERSION` range (`SUPPORTED_API_VERSIONS`) before opening a window. Raise
 that range only after checking the IDE against the new API.
 
-Sister package: `within-reach` (hot reload / screen grabber), not yet depended on.
+Sister package: `within-reach` (system detection, hot reload / screen grabber), depended on (`within-reach>=0.2.0,<0.3`): the
+IDE's "Verify System Settings" -- Tesseract on `PATH`, the Steam / Halo: MCC / gametype / map folders -- is
+`within_reach.system_verify` (`welcome`, `verify_dialog`, `maps_panel`, `explorer` and `main_window` import it as
+`from within_reach import system_verify`; `tests/test_within_reach_dependency.py` keeps that true). `in-reach` no longer has a copy of it (dropped in 0.4.0).
 
 ## Development
 

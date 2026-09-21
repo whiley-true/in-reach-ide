@@ -4740,7 +4740,8 @@ def test_refresh_halo_status_is_unverified_by_default(project_window: MainWindow
 def test_refresh_halo_status_is_verified_once_the_env_key_is_set_and_mcc_is_not_running(
     project_window: MainWindow, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    from in_reach.app import halo_status, project as project_module, system_verify
+    from in_reach.app import halo_status, project as project_module
+    from within_reach import system_verify
 
     env_path = system_verify.env_path_for(project_module.get_project_dir(project_window.root_dir))
     env_path.write_text(f"{system_verify.HALO_MCC_KEY}=C:\\MCC\n", encoding="utf-8")
@@ -4754,7 +4755,8 @@ def test_refresh_halo_status_is_verified_once_the_env_key_is_set_and_mcc_is_not_
 def test_refresh_halo_status_is_running_when_mcc_is_detected(
     project_window: MainWindow, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    from in_reach.app import halo_status, project as project_module, system_verify
+    from in_reach.app import halo_status, project as project_module
+    from within_reach import system_verify
 
     env_path = system_verify.env_path_for(project_module.get_project_dir(project_window.root_dir))
     env_path.write_text(f"{system_verify.HALO_MCC_KEY}=C:\\MCC\n", encoding="utf-8")
@@ -5318,7 +5320,8 @@ def test_launch_rvt_from_menu_launches_once_a_project_opens(
 
 
 def test_halo_mcc_verified_reflects_the_project_root_env(project_window: MainWindow) -> None:
-    from in_reach.app import env_file, project, system_verify
+    from in_reach.app import env_file, project
+    from within_reach import system_verify
 
     assert project_window.halo_mcc_verified() is False
 
@@ -5338,7 +5341,8 @@ def test_launch_mcc_from_menu_is_a_no_op_unless_verified(window: MainWindow, mon
 
 
 def test_launch_mcc_from_menu_launches_once_verified(project_window: MainWindow, monkeypatch) -> None:
-    from in_reach.app import env_file, project, system_verify
+    from in_reach.app import env_file, project
+    from within_reach import system_verify
 
     env_path = system_verify.env_path_for(project.get_project_dir(project_window.root_dir))
     env_file.update_env_value(env_path, system_verify.HALO_MCC_KEY, r"C:\Games\MCC")
@@ -5356,7 +5360,8 @@ def test_launch_mcc_from_menu_launches_once_verified(project_window: MainWindow,
 
 
 def test_open_builtin_folder_opens_the_env_resolved_path(project_window: MainWindow, tmp_path: Path) -> None:
-    from in_reach.app import env_file, project, system_verify
+    from in_reach.app import env_file, project
+    from within_reach import system_verify
 
     real_folder = tmp_path / "game_variants"
     real_folder.mkdir()
@@ -5373,7 +5378,7 @@ def test_open_builtin_folder_opens_the_env_resolved_path(project_window: MainWin
 def test_open_builtin_folder_warns_instead_of_opening_when_unresolved(
     project_window: MainWindow, monkeypatch
 ) -> None:
-    from in_reach.app import system_verify
+    from within_reach import system_verify
 
     opened: list[Path] = []
     project_window.open_folder_in_os_explorer = opened.append
@@ -5387,7 +5392,8 @@ def test_open_builtin_folder_warns_instead_of_opening_when_unresolved(
 
 
 def test_builtin_folder_button_click_reaches_main_window(project_window: MainWindow, tmp_path: Path) -> None:
-    from in_reach.app import env_file, project, system_verify
+    from in_reach.app import env_file, project
+    from within_reach import system_verify
 
     real_folder = tmp_path / "hotreload"
     real_folder.mkdir()

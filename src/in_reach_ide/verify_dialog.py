@@ -1,6 +1,6 @@
 """The popout window behind the Welcome tab's "Verify Now" button.
 
-Walks :data:`in_reach.app.system_verify.STEPS` one entry at a time, showing how many are left and
+Walks :data:`within_reach.system_verify.STEPS` one entry at a time, showing how many are left and
 what each one resolved to, writing every answer straight back to the project's ``.env`` as it goes.
 Steps that resolve on their own advance by themselves on a short timer, so the run visibly cycles
 rather than sitting on a single progress bar; a step that needs the user -- pick one of several
@@ -29,8 +29,8 @@ from PyQt6.QtWidgets import (
     QWidget,
 )
 
-from in_reach.app import system_verify
-from in_reach.app.system_verify import STEPS, Outcome, StepResult, VerifyRun, VerifyStep
+from within_reach import system_verify
+from within_reach.system_verify import STEPS, Outcome, StepResult, VerifyRun, VerifyStep
 from in_reach_ide import file_dialogs
 
 # Long enough that a run of self-resolving steps reads as a checklist ticking over rather than as
@@ -59,7 +59,7 @@ class VerifyDialog(QDialog):
         Args:
             project_dir: The project's ``.in-reach`` folder.
             parent: Owning widget.
-            run: Injectable :class:`~in_reach.app.system_verify.VerifyRun`, for testing -- one
+            run: Injectable :class:`~within_reach.system_verify.VerifyRun`, for testing -- one
                 built against a fake home folder/``shutil.which`` instead of this machine.
         """
         super().__init__(parent)

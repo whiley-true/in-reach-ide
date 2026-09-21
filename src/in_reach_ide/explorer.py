@@ -9,7 +9,7 @@ Labels/Strings) counts against this project's own confirmed engine caps (see
 :func:`~in_reach.app.rvt.settings_io.load_build_stats`/:func:`~in_reach.app.rvt.strings_io.
 count_script_strings`/:data:`_MAX_TRIGGERS` et al.), "Quick Launch" (the Export File/Launch RVT/
 View Compiled button row, plus "Built-in"/"Hot Reload" buttons that open the matching
-:mod:`in_reach.app.system_verify`-resolved folder in the OS file explorer), and "Settings" pointed
+:mod:`within_reach.system_verify`-resolved folder in the OS file explorer), and "Settings" pointed
 at its own ``settings/`` subfolder. There used to be a fourth, generic "browse the whole project
 folder" tree too; PROMPT.md asked for it to go now that Script/Settings cover the two subfolders
 actually worth browsing by hand -- and later, a "Script" quick-access box exactly like Settings'
@@ -53,7 +53,8 @@ from PyQt6.QtWidgets import (
     QWidget,
 )
 
-from in_reach.app import new_project, system_verify
+from in_reach.app import new_project
+from within_reach import system_verify
 from in_reach.app.rvt import settings_io, strings_io
 from in_reach_ide.collapsible_section import CollapsibleSection as _CollapsibleSection
 from in_reach_ide.collapsible_section import SECTION_HEADER_STYLE
@@ -289,8 +290,8 @@ class ExplorerPanel(QWidget):
 
     #: PROMPT.md: "underneath that top row of buttons, we want a subheader saying 'Built-in' and
     #: buttons for[...] then a subheader saying hot reload[...] Open HotReload Folder" -- emitted
-    #: with the :mod:`in_reach.app.system_verify` env key each button's own folder resolves under
-    #: (e.g. :data:`~in_reach.app.system_verify.STANDARD_VARIANTS_KEY`); MainWindow owns actually
+    #: with the :mod:`within_reach.system_verify` env key each button's own folder resolves under
+    #: (e.g. :data:`~within_reach.system_verify.STANDARD_VARIANTS_KEY`); MainWindow owns actually
     #: resolving and opening it (it's the one that already knows this window's own ``root_dir``,
     #: see :meth:`~in_reach_ide.main_window.MainWindow._open_builtin_folder`), same division of
     #: labor as export_requested/launch_rvt_requested above.
