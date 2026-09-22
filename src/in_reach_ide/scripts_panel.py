@@ -14,7 +14,7 @@ from __future__ import annotations
 from pathlib import Path
 
 from PyQt6.QtCore import Qt, pyqtSignal
-from PyQt6.QtGui import QBrush, QColor
+from PyQt6.QtGui import QBrush, QColor, QPalette
 from PyQt6.QtWidgets import (
     QAbstractItemView,
     QComboBox,
@@ -96,6 +96,11 @@ class ScriptsPanel(QWidget):
         scroll = QScrollArea()
         scroll.setWidgetResizable(True)
         scroll.setFrameShape(QFrame.Shape.NoFrame)
+        # A scroll area fills its viewport with the Window role (the IDE's chrome colour) unless told otherwise --
+        # the Dashboard's own scroll area sets Base on both it and its viewport for the same reason (see welcome.py).
+        for widget in (scroll, scroll.viewport()):
+            widget.setBackgroundRole(QPalette.ColorRole.Base)
+            widget.setAutoFillBackground(True)
         outer.addWidget(scroll)
         body = QWidget()
         scroll.setWidget(body)

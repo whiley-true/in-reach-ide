@@ -40,13 +40,13 @@ from within_reach import system_verify
 from in_reach_ide import indent_settings, recent
 from in_reach_ide.kanban_db import KanbanStore
 from in_reach_ide import file_dialogs, icons, style
-from in_reach_ide import indent_state
+from in_reach_ide import indent_state, word_wrap
 from in_reach_ide import theme as theme_module
 from in_reach_ide import zoom as zoom_module
 from in_reach_ide.activity_bar import DEFAULT_VIEW, ActivityBar
 from in_reach_ide.bottom_panel import BottomPanel
 from in_reach_ide.documentation_panel import DocumentationPanel
-from in_reach_ide.editor import TextEditorWidget
+from in_reach_ide.editor import TextEditorWidget, shows_cursor_info
 from in_reach_ide.explorer import ExplorerPanel
 from in_reach_ide.git_panel import GitPanel
 from in_reach_ide.kanban_panel import KanbanPanel
@@ -59,7 +59,7 @@ from in_reach_ide.scripts_panel import ScriptsPanel
 from in_reach_ide.search_panel import SearchPanel
 from in_reach_ide.settings_dialog import SettingsDialog
 from in_reach_ide.status_bar import StatusBar
-from in_reach_ide.tabs import MainPanelArea
+from in_reach_ide.tabs import MainPanelArea, TabPane
 from in_reach_ide.testing_panel import TestingPanel
 from in_reach_ide.theme import Theme
 from in_reach_ide.window_resize import cursor_for_edges, resize_edges
@@ -150,6 +150,7 @@ _SHORTCUT_LAUNCH_RVT = "Ctrl+Shift+L"
 #: .claude/rules/shortcuts-and-command-palette.md's own docstring for the rule itself).
 _SHORTCUT_TOGGLE_SIDEBAR = "Ctrl+B"
 _SHORTCUT_TOGGLE_PANEL = "Ctrl+J"
+_SHORTCUT_TOGGLE_WORD_WRAP = "Alt+Z"  # VSCode: Toggle Word Wrap
 _SHORTCUT_SETTINGS = "Ctrl+,"
 #: No real VSCode "compile"/"apply" analog -- modeled on "Run Build Task" instead, the closest real
 #: VSCode command to "turn my edited source into the actual output artifact".
@@ -350,6 +351,7 @@ class _ViewMenuButton(QToolButton):
 
         _add_action(menu, "Toggle Sidebar", window.toggle_sidebar, _SHORTCUT_TOGGLE_SIDEBAR)
         _add_action(menu, "Toggle Panel", window.toggle_panel, _SHORTCUT_TOGGLE_PANEL)
+        _add_action(menu, "Toggle Word Wrap", window.toggle_word_wrap, _SHORTCUT_TOGGLE_WORD_WRAP)
         menu.addSeparator()
 
         # PROMPT.md's own re-ordering, keyed to activity_bar.py's own button attributes -- "docs"/
@@ -718,6 +720,7 @@ class MainWindow(QWidget):
             on_project_opened=self._on_project_opened,
             on_file_saved=self._on_file_saved,
             project_title=self._active_project_title,
+            on_cursor_info=self._show_cursor_info,
         )
         self._main_splitter.addWidget(self.main_panel)
 
@@ -825,6 +828,9 @@ class MainWindow(QWidget):
         # fresh, so this one connection stays correct regardless of which pane fired it.
         indent_env_path = project.get_project_dir(self.root_dir) / ".env"
         indent_state.set_indent(*indent_settings.get_indent(indent_env_path))
+        # Restored tabs were opened above, before the saved choice was read -- apply it to them too.
+        word_wrap.set_enabled(word_wrap.get_saved(indent_env_path))
+        self.main_panel.set_word_wrap(word_wrap.is_enabled())
         self.main_panel.cursor_info_changed.connect(self._update_status_cursor_info)
         self._update_status_cursor_info()
 
@@ -1128,6 +1134,7 @@ class MainWindow(QWidget):
             Command(label="Close All", action=self.close_all_tabs),
             Command(label="Toggle Sidebar", action=self.toggle_sidebar, detail=_SHORTCUT_TOGGLE_SIDEBAR),
             Command(label="Toggle Panel", action=self.toggle_panel, detail=_SHORTCUT_TOGGLE_PANEL),
+            Command(label="Toggle Word Wrap", action=self.toggle_word_wrap, detail=_SHORTCUT_TOGGLE_WORD_WRAP),
             Command(label="Settings", action=self.open_settings_dialog, detail=_SHORTCUT_SETTINGS),
             Command(
                 label="Set Theme",
@@ -1329,31 +1336,42 @@ class MainWindow(QWidget):
     def _update_status_cursor_info(self) -> None:
         """Refreshes (or hides) the bottom-right Ln/Col/Spaces segments to match the active pane's
         own current tab -- called on every cursor move/selection change and tab switch (see
-        ``TabPane.cursor_info_changed``), and once at startup.
+        ``TabPane.cursor_info_changed``), and once at startup."""
+        self._show_cursor_info(self.main_panel.active_pane, self.status_bar)
 
-        PROMPT.md: only shown "if viewing either a .txt file or .json file" -- every other open tab
-        kind (Welcome, a Markdown preview, a ``.mvar``/``.bin`` this app doesn't even open as text)
-        clears the segments instead.
+    def _show_cursor_info(self, pane: TabPane, status_bar: StatusBar) -> None:
+        """Fills ``status_bar`` -- the main window's own, or a popout window's (see
+        :attr:`~in_reach_ide.tabs.MainPanelArea.on_cursor_info`) -- from ``pane``'s current tab.
+
+        PROMPT.md: only shown "if viewing either a .txt file or .json file" (and a Megalo ``.mgl`` script, see
+        :func:`~in_reach_ide.editor.shows_cursor_info`) -- every other open tab kind (Welcome, a Markdown preview, a
+        ``.mvar``/``.bin`` this app doesn't even open as text) clears the segments instead.
         """
-        widget = self.main_panel.active_pane.currentWidget()
-        if (
-            not isinstance(widget, TextEditorWidget)
-            or widget.path is None
-            or widget.path.suffix.lower() not in (".txt", ".json")
-        ):
-            self.status_bar.clear_cursor_info()
+        widget = pane.currentWidget()
+        if not isinstance(widget, TextEditorWidget) or not shows_cursor_info(widget.path):
+            status_bar.clear_cursor_info()
             return
         cursor = widget.textCursor()
         style, width = indent_state.get_indent()
-        self.status_bar.set_cursor_info(
+        status_bar.set_cursor_info(
             cursor.blockNumber() + 1,
             cursor.positionInBlock() + 1,
             abs(cursor.selectionEnd() - cursor.selectionStart()),
             style,
             width,
-            on_cursor_click=lambda: self._open_goto_line(widget),
-            on_spaces_click=self._open_indent_action_list,
+            on_cursor_click=lambda: self._from_status_bar(pane, status_bar, lambda: self._open_goto_line(widget)),
+            on_spaces_click=lambda: self._from_status_bar(pane, status_bar, self._open_indent_action_list),
         )
+
+    def _from_status_bar(self, pane: TabPane, status_bar: StatusBar, action: Callable[[], None]) -> None:
+        """Runs a status-bar segment's click. The Quick Access Bar those open lives in this window's top bar, so a
+        click on a popout's own bar first makes that popout's pane the active one (the indentation actions act on
+        the active editor) and brings this window forward."""
+        if status_bar is not self.status_bar:
+            self.main_panel._mark_active(pane)
+            self.raise_()
+            self.activateWindow()
+        action()
 
     def _open_goto_line(self, editor: TextEditorWidget) -> None:
         """The Ln/Col segment's own click -- opens the Quick Access Bar pre-armed to jump to a
@@ -1603,6 +1621,15 @@ class MainWindow(QWidget):
         panel_toggle button, same "real click" reasoning as :meth:`toggle_sidebar`."""
         self.top_bar.panel_toggle.click()
 
+    def toggle_word_wrap(self) -> None:
+        """"Toggle Word Wrap" (Alt+Z, matching VSCode's own default) -- wraps long lines in every open editor at
+        once, or puts them back on one row under a horizontal scrollbar; the choice is saved with the project's
+        other settings so it survives a relaunch, and applies to editors opened later."""
+        enabled = not word_wrap.is_enabled()
+        word_wrap.set_enabled(enabled)
+        word_wrap.save(project.get_project_dir(self.root_dir) / ".env", enabled)
+        self.main_panel.set_word_wrap(enabled)
+
     def view_logs(self) -> None:
         """"View Logs" (the View menu, PROMPT.md) -- opens the bottom panel onto its live Logs tab
         (see :mod:`in_reach_ide.logs_panel`), showing the panel first if it was collapsed (same
@@ -1666,6 +1693,10 @@ class MainWindow(QWidget):
         command) already funnels through here, so this is the one place that needs to do it.
         """
         self.status_bar.set_color(theme.status_bar_color)
+        self.main_panel.set_status_bar_color(theme.status_bar_color)
+        # Every open editor keeps its text (and any unsaved edits) -- only its syntax colours are re-picked, from
+        # the new theme's own base colour rather than a widget palette that hasn't caught up yet.
+        self.main_panel.refresh_theme(theme.build_palette().color(QPalette.ColorRole.Base))
         self.refresh_icon_colors(theme.palette_colors.get("window_text"))
         env_file.update_env_value(
             project.get_project_dir(self.root_dir) / ".env", theme_module.THEME_KEY, theme.name

@@ -283,6 +283,11 @@ class _DiffPane(QPlainTextEdit):
         :class:`_DiffMinimap` reads to decide which shrunk lines to highlight."""
         return self._kinds
 
+    def refresh_theme(self, base_color: QColor) -> None:
+        """Re-picks the JSON highlighter's light/dark palette for a new theme's ``base_color`` -- the text is untouched."""
+        if self._highlighter is not None:
+            self._highlighter.set_base_color(base_color)
+
     def set_json_highlighting(self, enabled: bool) -> None:
         if enabled and self._highlighter is None:
             base_color = self.palette().color(QPalette.ColorRole.Base)
@@ -427,6 +432,11 @@ class DiffViewWidget(QWidget):
         left_lines, left_kinds, left_linenos, right_lines, right_kinds, right_linenos = _align(old_lines, new_lines)
         self.old_pane.set_lines(left_lines, left_kinds, left_linenos)
         self.new_pane.set_lines(right_lines, right_kinds, right_linenos)
+
+    def refresh_theme(self, base_color: QColor) -> None:
+        """A theme switch: recolours both panes' syntax highlighting, leaving the text alone."""
+        self.old_pane.refresh_theme(base_color)
+        self.new_pane.refresh_theme(base_color)
 
     def _sync_from_old(self, value: int) -> None:
         if self._syncing_scroll:

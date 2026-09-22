@@ -407,6 +407,7 @@ def test_build_command_palette_commands_offers_set_theme_and_set_ui_scale(projec
         "Close All",
         "Toggle Sidebar",
         "Toggle Panel",
+        "Toggle Word Wrap",
         "Settings",
         "Set Theme",
         "Set UI Scale",

@@ -88,13 +88,24 @@ def _string_spans(text: str) -> list[tuple[int, int]]:
 class MegaloSyntaxHighlighter(QSyntaxHighlighter):
     def __init__(self, document: QTextDocument, *, base_color: QColor) -> None:
         super().__init__(document)
+        self._formats = self._build_formats(base_color)
+
+    def set_base_color(self, base_color: QColor) -> None:
+        """Re-picks the light or dark palette for a new editor background (a theme switch) and recolours every line --
+        the document's text and modified state are untouched."""
+        self._formats = self._build_formats(base_color)
+        self.rehighlight()
+
+    @staticmethod
+    def _build_formats(base_color: QColor) -> dict[str, QTextCharFormat]:
         colors = _DARK if _is_dark(base_color) else _LIGHT
-        self._formats: dict[str, QTextCharFormat] = {}
+        formats: dict[str, QTextCharFormat] = {}
         for name, color in zip(_NAMES, colors):
             fmt = QTextCharFormat()
             fmt.setForeground(QColor(color))
-            self._formats[name] = fmt
-        self._formats["directive"].setFontWeight(QFont.Weight.Bold)
+            formats[name] = fmt
+        formats["directive"].setFontWeight(QFont.Weight.Bold)
+        return formats
 
     def highlightBlock(self, text: str) -> None:  # noqa: N802 -- Qt's own override name
         comment_at = _comment_start(text)

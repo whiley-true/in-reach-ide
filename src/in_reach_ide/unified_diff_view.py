@@ -93,6 +93,11 @@ class _UnifiedDiffPane(QPlainTextEdit):
         self.updateRequest.connect(self._update_gutter)
         self._update_gutter_width()
 
+    def refresh_theme(self, base_color: QColor) -> None:
+        """Re-picks the JSON highlighter's light/dark palette for a new theme's ``base_color`` -- the text is untouched."""
+        if self._highlighter is not None:
+            self._highlighter.set_base_color(base_color)
+
     def set_json_highlighting(self, enabled: bool) -> None:
         if enabled and self._highlighter is None:
             base_color = self.palette().color(QPalette.ColorRole.Base)
@@ -211,6 +216,10 @@ class UnifiedDiffViewWidget(QWidget):
         self.pane.set_json_highlighting(is_json)
 
         self.set_diff(old_text, new_text)
+
+    def refresh_theme(self, base_color: QColor) -> None:
+        """A theme switch: recolours the syntax highlighting, leaving the text alone."""
+        self.pane.refresh_theme(base_color)
 
     def set_diff(self, old_text: str | None, new_text: str | None) -> None:
         old_lines = (old_text or "").splitlines()

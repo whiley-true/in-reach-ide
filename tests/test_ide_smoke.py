@@ -5183,6 +5183,7 @@ def test_view_menu_has_command_palette_appearance_panel_switches_and_view_logs_i
     # view)") moved Search up under Dashboard, added Kanban right after Documentation, and moved
     # Testing to sit directly ahead of LLM. A further pass ("add command palette shortcuts and
     # entries for all present functionality") added Settings and Toggle Sidebar/Toggle Panel.
+    # A further pass (wider spaces/word wrap) added Toggle Word Wrap alongside them.
     menu = project_window.top_bar.view_menu_button.menu()
     top_level = [action.text() for action in menu.actions() if not action.isSeparator()]
 
@@ -5192,6 +5193,7 @@ def test_view_menu_has_command_palette_appearance_panel_switches_and_view_logs_i
         "Appearance",
         "Toggle Sidebar",
         "Toggle Panel",
+        "Toggle Word Wrap",
         "Dashboard",
         "Search",
         "Git",

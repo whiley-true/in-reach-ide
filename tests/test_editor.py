@@ -2,12 +2,12 @@ from pathlib import Path
 
 import pytest
 from PyQt6.QtCore import QMimeData, Qt
-from PyQt6.QtGui import QPalette, QTextCursor, QTextFormat
-from PyQt6.QtWidgets import QApplication
+from PyQt6.QtGui import QColor, QFont, QFontMetricsF, QPalette, QTextCursor, QTextFormat
+from PyQt6.QtWidgets import QApplication, QFrame, QPlainTextEdit
 
 from in_reach_ide import indent_settings
-from in_reach_ide import indent_state
-from in_reach_ide.editor import TextEditorWidget, _indent_level
+from in_reach_ide import indent_state, word_wrap
+from in_reach_ide.editor import TextEditorWidget, shows_cursor_info
 from in_reach_ide.json_highlighter import JsonSyntaxHighlighter
 
 
@@ -16,8 +16,10 @@ def _reset_indent_state():
     # indent_state is process-global (see its own module docstring) -- reset it around every test
     # here so one test's Tab-key setting can't leak into the next.
     saved = indent_state.get_indent()
+    saved_wrap = word_wrap.is_enabled()
     yield
     indent_state.set_indent(*saved)
+    word_wrap.set_enabled(saved_wrap)
 
 
 def _has_opaque_pixel(image) -> bool:
@@ -348,48 +350,15 @@ def test_clicking_the_gutter_on_a_non_foldable_line_does_nothing(qtbot) -> None:
     assert editor._collapsed_folds == set()
 
 
-# -- indent guides ------------------------------------------------------------------------------
-
-
-def test_indent_level_counts_complete_two_space_levels() -> None:
-    assert _indent_level("") == 0
-    assert _indent_level('"a": 1') == 0
-    assert _indent_level('  "a": 1') == 1
-    assert _indent_level('    "a": 1') == 2
-    assert _indent_level("   odd single space") == 1  # 3 leading spaces -- 1 complete level
-
-
-def test_indent_guides_paint_a_line_at_each_indent_level(qtbot) -> None:
+def test_the_real_text_edit_has_no_native_frame_border(qtbot) -> None:
+    # QPlainTextEdit's own default frame (StyledPanel) draws a sunken border around the whole
+    # widget -- including a persistent vertical line along its own left edge, right next to the
+    # gutter, on every row regardless of content. VS Code's editor has none, and this app's other
+    # panes (gutter/breadcrumb/minimap) are already plain, layout-managed siblings with none either.
     editor = TextEditorWidget()
     qtbot.addWidget(editor)
-    editor.resize(300, 200)
-    editor.setPlainText('{\n    "a": 1\n}')  # line 1 is indented two levels (4 spaces)
-    editor.show()
-    QApplication.processEvents()
-    QApplication.processEvents()
 
-    space_width = editor.fontMetrics().horizontalAdvance(" ")
-    base_x = round(editor.contentOffset().x())
-    background = editor.palette().color(QPalette.ColorRole.Base)  # the minimap's own fill color
-
-    pixmap = editor.viewport().grab()
-    image = pixmap.toImage()
-    block = editor.document().findBlockByNumber(1)
-    y = round(editor.blockBoundingGeometry(block).translated(editor.contentOffset()).top()) + 2
-
-    # A guide line should sit at 2 and 4 spaces in -- neither column is the plain background color.
-    for level in (1, 2):
-        x = base_x + level * 2 * space_width
-        assert 0 <= x < image.width()
-        assert image.pixelColor(x, y) != background
-
-
-def test_indent_guides_do_not_crash_on_an_empty_document(qtbot) -> None:
-    editor = TextEditorWidget()
-    qtbot.addWidget(editor)
-    editor.resize(300, 200)
-    editor.show()
-    QApplication.processEvents()  # should not raise
+    assert editor._edit.frameShape() == QFrame.Shape.NoFrame
 
 
 # -- live schema validation (PROMPT.md: "highlighting and error message if schema is incorrect") -
@@ -1199,3 +1168,143 @@ def test_highlight_line_and_schema_error_underlines_coexist(qtbot, tmp_path) -> 
     editor.highlight_line(0)
 
     assert len(editor.extraSelections()) == 2
+
+
+# -- wider spaces, no wrapping by default, word wrap as an opt-in ---------------------------------
+
+
+_LONG_LINE = "word " * 200
+
+
+def test_a_new_editor_does_not_wrap_and_scrolls_a_long_line_sideways(qtbot) -> None:
+    editor = TextEditorWidget()
+    qtbot.addWidget(editor)
+    editor.resize(300, 200)
+    editor.setPlainText(_LONG_LINE)
+    editor.show()
+    QApplication.processEvents()
+
+    assert editor.lineWrapMode() == QPlainTextEdit.LineWrapMode.NoWrap
+    assert editor.blockBoundingRect(editor.document().firstBlock()).height() < 2 * editor.fontMetrics().height()
+    assert editor.horizontalScrollBar().maximum() > 0
+    assert editor.horizontalScrollBar().isVisible()
+
+
+def test_word_wrap_puts_a_long_line_on_several_rows_with_no_horizontal_scroll(qtbot) -> None:
+    editor = TextEditorWidget()
+    qtbot.addWidget(editor)
+    editor.resize(300, 200)
+    editor.setPlainText(_LONG_LINE)
+    editor.show()
+    QApplication.processEvents()
+
+    editor.set_word_wrap(True)
+    QApplication.processEvents()
+
+    assert editor.lineWrapMode() == QPlainTextEdit.LineWrapMode.WidgetWidth
+    assert editor.blockBoundingRect(editor.document().firstBlock()).height() > 2 * editor.fontMetrics().height()
+    assert editor.horizontalScrollBar().maximum() == 0
+
+    editor.set_word_wrap(False)
+    QApplication.processEvents()
+
+    assert editor.lineWrapMode() == QPlainTextEdit.LineWrapMode.NoWrap
+    assert editor.horizontalScrollBar().maximum() > 0
+
+
+def test_a_new_editor_follows_the_shared_word_wrap_switch(qtbot) -> None:
+    word_wrap.set_enabled(True)
+    wrapping = TextEditorWidget()
+    qtbot.addWidget(wrapping)
+    word_wrap.set_enabled(False)
+    plain = TextEditorWidget()
+    qtbot.addWidget(plain)
+
+    assert wrapping.lineWrapMode() == QPlainTextEdit.LineWrapMode.WidgetWidth
+    assert plain.lineWrapMode() == QPlainTextEdit.LineWrapMode.NoWrap
+
+
+def test_spaces_are_wider_than_the_fonts_own(qtbot) -> None:
+    editor = TextEditorWidget()
+    qtbot.addWidget(editor)
+    plain = QFont(editor.font())
+    plain.setWordSpacing(0.0)
+
+    assert editor.font().wordSpacing() > 0
+    assert QFontMetricsF(editor.font()).horizontalAdvance("a b") > QFontMetricsF(plain).horizontalAdvance("a b")
+
+
+def test_spaces_stay_wider_after_the_font_is_refreshed_for_zoom_or_a_new_name(qtbot) -> None:
+    editor = TextEditorWidget()
+    qtbot.addWidget(editor)
+    before = editor.font().wordSpacing()
+
+    editor.refresh_font_scale()
+    editor.set_path(Path("settings.json"))  # an enlarged-font file name
+
+    assert before > 0
+    assert editor.font().wordSpacing() > before  # scaled up with its own larger space
+
+
+# -- the Ln/Col and Spaces segments -----------------------------------------------------------
+
+
+def test_shows_cursor_info_covers_text_json_and_megalo_scripts_only() -> None:
+    assert shows_cursor_info(Path("notes.txt"))
+    assert shows_cursor_info(Path("settings.json"))
+    assert shows_cursor_info(Path("script/blocks/main.mgl"))
+    assert shows_cursor_info(Path("MODULE.MGL"))
+    assert not shows_cursor_info(Path("README.md"))
+    assert not shows_cursor_info(Path("game.bin"))
+    assert not shows_cursor_info(None)
+
+
+# -- theme switches recolour an open editor without touching its text -----------------------------
+
+
+def _first_line_colors(editor: TextEditorWidget) -> set[str]:
+    layout = editor.document().findBlockByNumber(0).layout()
+    return {r.format.foreground().color().name() for r in layout.formats()}
+
+
+@pytest.mark.parametrize(
+    "name, text",
+    [("settings.json", '{"key": "value"}'), ("block.mgl", "if current_player.number[0] == 1 then")],
+)
+def test_refresh_theme_swaps_the_syntax_colours_but_keeps_text_and_unsaved_state(qtbot, name: str, text: str) -> None:
+    editor = TextEditorWidget(path=Path(name))
+    qtbot.addWidget(editor)
+    editor.setPlainText(text)
+    editor.document().setModified(False)
+    QTextCursor(editor.document()).insertText("  ")  # an unsaved edit
+    edited = editor.toPlainText()
+    assert editor.document().isModified()
+
+    editor.refresh_theme(QColor("#1e1e1e"))
+    dark = _first_line_colors(editor)
+    editor.refresh_theme(QColor("#ffffff"))
+    light = _first_line_colors(editor)
+
+    assert dark and light and dark.isdisjoint(light)
+    assert editor.toPlainText() == edited
+    assert editor.document().isModified()  # nothing was saved
+
+
+def test_refresh_theme_leaves_a_clean_document_clean(qtbot) -> None:
+    editor = TextEditorWidget(path=Path("settings.json"))
+    qtbot.addWidget(editor)
+    editor.setPlainText('{"a": 1}')
+    editor.document().setModified(False)
+    undo_steps = editor.document().availableUndoSteps()
+
+    editor.refresh_theme(QColor("#252526"))
+
+    assert not editor.document().isModified()
+    assert editor.document().availableUndoSteps() == undo_steps  # recolouring is not an edit
+
+
+def test_refresh_theme_on_a_file_with_no_highlighter_does_not_raise(qtbot) -> None:
+    editor = TextEditorWidget(path=Path("notes.txt"))
+    qtbot.addWidget(editor)
+    editor.refresh_theme(QColor("#252526"))
+    editor.refresh_theme()

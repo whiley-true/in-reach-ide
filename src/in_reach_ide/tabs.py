@@ -26,6 +26,7 @@ from typing import Callable
 
 from PyQt6.QtCore import QMimeData, QPoint, QSize, Qt, QTimer, pyqtSignal
 from PyQt6.QtGui import (
+    QColor,
     QDrag,
     QDragEnterEvent,
     QDragMoveEvent,
@@ -57,6 +58,8 @@ from in_reach_ide.editor import TextEditorWidget
 from in_reach_ide.kanban_board import KanbanBoardView
 from in_reach_ide.pane_splitter import PaneSplitter
 from in_reach_ide.markdown_preview import MarkdownPreviewWidget
+from in_reach_ide.status_bar import StatusBar
+from in_reach_ide.unified_diff_view import UnifiedDiffViewWidget
 from in_reach_ide.welcome import WelcomeTab
 
 _MIME_TYPE = "application/x-inreach-tab"
@@ -1120,7 +1123,12 @@ class _PopoutWindow(QWidget):
         self.setWindowTitle(title)
         layout = QVBoxLayout(self)
         layout.setContentsMargins(0, 0, 0, 0)
-        layout.addWidget(style.wrap_tab_widget(pane, flush_top=True))
+        layout.setSpacing(0)
+        layout.addWidget(style.wrap_tab_widget(pane, flush_top=True), 1)
+        #: The bottom bar (Ln/Col and Spaces for a text tab) -- the main window's own has the same segments.
+        #: A popout has a native frame, so this one doesn't take over the window's edge for resizing.
+        self.status_bar = StatusBar(self, edge_resize=False)
+        layout.addWidget(self.status_bar)
         self.resize(900, 650)
 
     def closeEvent(self, event) -> None:  # noqa: ANN001 -- QCloseEvent
@@ -1163,6 +1171,7 @@ class MainPanelArea(QWidget):
         on_settings_changed: Callable[[], None] | None = None,
         on_file_saved: Callable[[Path], None] | None = None,
         project_title: Callable[[], str] | None = None,
+        on_cursor_info: Callable[["TabPane", StatusBar], None] | None = None,
     ) -> None:
         super().__init__(parent)
         self.root_dir = root_dir or Path.cwd()
@@ -1176,6 +1185,13 @@ class MainPanelArea(QWidget):
         #: same reasoning as ``reveal_in_explorer``/``on_project_opened`` above: this widget stays
         #: framework-agnostic about what "the active project" even means.
         self.project_title = project_title
+        #: Fills a popout window's own bottom bar from its pane's current tab (Ln/Col/Spaces, or nothing for a tab
+        #: that isn't a text editor) -- injectable, same reasoning as ``project_title``: what the segments click
+        #: through to (Go to Line, the indentation actions) lives in MainWindow.
+        self.on_cursor_info = on_cursor_info
+        #: The current theme's status-bar accent colour, applied to every popout's bottom bar (see
+        #: :meth:`set_status_bar_color`); ``None`` until MainWindow first applies a theme.
+        self._status_bar_color: str | None = None
         layout = QVBoxLayout(self)
         layout.setContentsMargins(0, 0, 0, 0)
 
@@ -1226,6 +1242,37 @@ class MainPanelArea(QWidget):
     @property
     def panes(self) -> list[TabPane]:
         return [pane for group in self.groups for pane in group.panes] + self._floating_panes
+
+    def text_editors(self) -> list[TextEditorWidget]:
+        """Every open text-editor tab, across every pane (popout windows included)."""
+        return [
+            widget
+            for pane in self.panes
+            for index in range(pane.count())
+            if isinstance(widget := pane.widget(index), TextEditorWidget)
+        ]
+
+    def set_word_wrap(self, enabled: bool) -> None:
+        """Applies the IDE-wide word-wrap switch to every open text editor."""
+        for editor in self.text_editors():
+            editor.set_word_wrap(enabled)
+
+    def refresh_theme(self, base_color: QColor) -> None:
+        """Recolours every open editor and diff tab for a newly applied theme -- syntax highlighting picks a light or
+        dark palette from the editor's background, so it has to be re-picked. Nothing is saved or reloaded: the text
+        (and any unsaved edits in it) stays exactly as it is. ``base_color`` is passed in rather than read back from a
+        widget's palette, which only updates once the palette-change event has been processed."""
+        for pane in self.panes:
+            for index in range(pane.count()):
+                widget = pane.widget(index)
+                if isinstance(widget, (TextEditorWidget, DiffViewWidget, UnifiedDiffViewWidget)):
+                    widget.refresh_theme(base_color)
+
+    def set_status_bar_color(self, color_hex: str) -> None:
+        """Colours every popout window's bottom bar to match the main window's (the theme's own accent colour)."""
+        self._status_bar_color = color_hex
+        for window in self._popout_windows.values():
+            window.status_bar.set_color(color_hex)
 
     @property
     def active_pane(self) -> TabPane:
@@ -1708,6 +1755,11 @@ class MainPanelArea(QWidget):
         title = self.project_title() if self.project_title is not None else "in-reach"
         window = _PopoutWindow(new_pane, title=title)
         self._popout_windows[new_pane] = window
+        if self._status_bar_color is not None:
+            window.status_bar.set_color(self._status_bar_color)
+        if self.on_cursor_info is not None:
+            new_pane.cursor_info_changed.connect(lambda: self.on_cursor_info(new_pane, window.status_bar))
+            self.on_cursor_info(new_pane, window.status_bar)
         window.show()
 
         self.on_pane_emptied(source)

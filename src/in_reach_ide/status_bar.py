@@ -19,8 +19,9 @@ any more.
 PROMPT.md (Quick Access Bar work): bottom-right "Ln X, Col Y (N selected)"/"Spaces: N" (or
 "Tabs: N", whichever indent style is actually live -- PROMPT.md: "spaces [segment] should
 represent what is live in the document at present") segments, shown only while a ``.txt``/
-``.json`` tab is active (see ``bottom_bar_example.png``) -- see :meth:`set_cursor_info`/
-:meth:`clear_cursor_info`. Each is a plain clickable label wired to a caller-supplied callback
+``.json``/Megalo script (``.mgl``) tab is active (see ``bottom_bar_example.png``) -- see :meth:`set_cursor_info`/
+:meth:`clear_cursor_info`. A popout window has its own, slimmer instance (``edge_resize=False``: it has a native
+frame, so the bar doesn't resize anything) showing just those two segments. Each is a plain clickable label wired to a caller-supplied callback
 rather than a signal -- one fewer layer for something this local, same "kept as its own method
 purely as a test seam" convention used throughout this bar/``main_window.py``.
 """
@@ -60,9 +61,10 @@ class _ClickableLabel(QLabel):
 
 
 class StatusBar(QWidget):
-    def __init__(self, window: QWidget, parent: QWidget | None = None) -> None:
+    def __init__(self, window: QWidget, parent: QWidget | None = None, *, edge_resize: bool = True) -> None:
         super().__init__(parent)
         self._window = window
+        self._edge_resize = edge_resize
         self.setFixedHeight(_HEIGHT)
         self.setAttribute(Qt.WidgetAttribute.WA_StyledBackground, True)
         self.setObjectName("statusBar")
@@ -158,12 +160,12 @@ class StatusBar(QWidget):
         self.spaces_label.show()
 
     def clear_cursor_info(self) -> None:
-        """Hides the Ln/Col/Spaces segments -- no ``.txt``/``.json`` tab is active."""
+        """Hides the Ln/Col/Spaces segments -- no ``.txt``/``.json``/Megalo script tab is active."""
         self.cursor_label.hide()
         self.spaces_label.hide()
 
     def _edges_at(self, pos) -> Qt.Edge:  # noqa: ANN001 -- QPoint
-        if self._window.isMaximized():
+        if not self._edge_resize or self._window.isMaximized():
             return Qt.Edge(0)
         return resize_edges(pos, self.width(), self.height(), top=False, bottom=True)
 

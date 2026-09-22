@@ -8,9 +8,6 @@ Adds, on top of the base ``QPlainTextEdit`` (PROMPT.md, across two passes):
 - Fold markers in that same gutter, and the bracket-matching behind them (see
   :mod:`in_reach_ide.code_folding`) -- "collapsible and expandable snippets". Bracket-based, not
   JSON-specific, so it works the same for a Megalo ``script.txt`` as a settings ``.json``.
-- Indent guides -- thin vertical lines through the text area at each indentation level (PROMPT.md:
-  "the | symbol to show line markers"; a first pass read this as the fold arrows above instead, per
-  a later PROMPT.md pass -- "we're still missing the | symbol" -- that one wasn't it).
 - A breadcrumb bar pinned above the text -- the open file's own path, plus (for a ``.json`` file
   specifically) the live JSON structural path to wherever the cursor currently sits (see
   :mod:`in_reach_ide.json_breadcrumb`).
@@ -20,6 +17,10 @@ Adds, on top of the base ``QPlainTextEdit`` (PROMPT.md, across two passes):
   file's own extension is ``.json``.
 - A minimap pinned along the right edge, next to the vertical scrollbar (PROMPT.md: "a live code
   preview on the right hand side next to the scrollbar") -- see :class:`_Minimap`.
+- Wider spaces than the font's own (:data:`_SPACE_EXTRA`), so a run of indentation doesn't clump
+  against the text next to it, and no line wrapping by default -- a long line scrolls under a
+  horizontal scrollbar, with word wrap an opt-in shared by every editor
+  (:mod:`in_reach_ide.word_wrap`).
 
 ``TextEditorWidget`` (the class every other module imports and treats as "the editor") is a plain
 ``QWidget`` composing the actual ``QPlainTextEdit`` (:class:`_PlainTextEditor`) together with the
@@ -52,6 +53,7 @@ from PyQt6.QtCore import QPoint, QPointF, QRectF, QSize, Qt, pyqtSignal
 from PyQt6.QtGui import (
     QColor,
     QFont,
+    QFontMetricsF,
     QKeyEvent,
     QKeySequence,
     QMouseEvent,
@@ -66,6 +68,7 @@ from PyQt6.QtGui import (
 )
 from PyQt6.QtWidgets import (
     QApplication,
+    QFrame,
     QGridLayout,
     QLabel,
     QPlainTextDocumentLayout,
@@ -76,7 +79,7 @@ from PyQt6.QtWidgets import (
 )
 
 from in_reach_ide import indent_settings
-from in_reach_ide import indent_state, schema_check
+from in_reach_ide import indent_state, schema_check, word_wrap
 from in_reach_ide.code_folding import compute_fold_ranges
 from in_reach_ide.find_replace import FindReplaceBar
 from in_reach_ide.json_breadcrumb import json_breadcrumb_path
@@ -96,9 +99,10 @@ _MINIMAP_WIDTH = 72
 #: Fixed error red -- same reasoning as json_highlighter.py's own fixed token palette: a schema
 #: error reads as unambiguously wrong regardless of which of this app's themes is active.
 _ERROR_COLOR = "#f14c4c"
-#: Spaces per indent level for the vertical guide lines -- matches this project's own generated
-#: ``.json`` files (``json.dump(..., indent=2)``) and ``vs_sample.png`` itself.
-_INDENT_SIZE = 2
+#: Extra width added to every space, as a fraction of the font's own space advance -- the app font is
+#: proportional, and its plain space is only a few pixels wide, so a run of indentation reads as one
+#: clump against the text next to it. Applied as :meth:`QFont.setWordSpacing`.
+_SPACE_EXTRA = 1.0
 #: Alpha applied to the theme's own Highlight color for the "Go to Line" target-line background --
 #: same technique (and alpha, for visual consistency) as the minimap's own visible-viewport band in
 #: :meth:`_Minimap.paintEvent`, just applied to a single document line instead of a page range.
@@ -145,13 +149,6 @@ ENLARGED_FILENAMES = frozenset({"settings.json", "script_settings.json", "string
 FONT_SCALE = 1.1
 
 
-def _indent_level(text: str) -> int:
-    """How many complete :data:`_INDENT_SIZE`-space indent levels ``text`` (one line) starts
-    with."""
-    leading = len(text) - len(text.lstrip(" "))
-    return leading // _INDENT_SIZE
-
-
 def _find_project_title(path: Path) -> str | None:
     """Walks ``path``'s own ancestors looking for a gametype project folder (one holding a
     ``Notes.txt`` -- every project has exactly one, see
@@ -178,6 +175,19 @@ def is_megalo_path(path: Path | None) -> bool:
     if path.suffix.lower() == ".mgl":
         return True
     return path.name in ("output.txt", "Compiled.txt") and path.parent.name in ("script", "build")
+
+
+#: Files whose tab shows the status bar's Ln/Col and Spaces segments (besides Megalo scripts, see
+#: :func:`shows_cursor_info`).
+_CURSOR_INFO_SUFFIXES = frozenset({".txt", ".json"})
+
+
+def shows_cursor_info(path: Path | None) -> bool:
+    """Whether an editor tab for ``path`` shows the status bar's Ln/Col and Spaces segments: a ``.txt``/``.json`` file
+    or Megalo script text (see :func:`is_megalo_path`). A tab with no path yet doesn't."""
+    if path is None:
+        return False
+    return path.suffix.lower() in _CURSOR_INFO_SUFFIXES or is_megalo_path(path)
 
 
 class _LineNumberArea(QWidget):
@@ -283,7 +293,7 @@ class _Minimap(QWidget):
 
     def _visible_block_count(self) -> int:
         """How many of the main editor's own blocks currently fit in its viewport -- walking block
-        geometry (same technique :meth:`_PlainTextEditor._draw_indent_guides` already uses) rather
+        geometry (same technique :meth:`_PlainTextEditor.paint_line_numbers` already uses) rather
         than a fixed guess, so it stays correct as a block wraps across several visual lines."""
         editor = self._editor
         viewport_height = editor.viewport().height()
@@ -409,6 +419,14 @@ class _PlainTextEditor(QPlainTextEdit):
 
     def __init__(self, document: QTextDocument | None = None) -> None:
         super().__init__()
+        # QPlainTextEdit's own default frame (a sunken StyledPanel border around the whole widget)
+        # otherwise draws a persistent vertical line along this editor's left edge, right next to
+        # the gutter, on every single row regardless of content -- easy to mistake for one more
+        # indent guide (it's what actually made rows genuinely matching VS Code's own guide count
+        # look wrong at a glance). VS Code's own editor has no such border; this app's other panes
+        # (the gutter, breadcrumb, minimap) are already plain, layout-managed siblings with none of
+        # their own either, so this just brings the real text edit in line with them.
+        self.setFrameShape(QFrame.Shape.NoFrame)
         # A confirmed, reproducible PyQt6/Qt6 bug (not anything about this app's own code -- an
         # isolated, from-scratch repro with two bare, un-subclassed QPlainTextEdits and zero
         # gutter/minimap/breadcrumb/splitter code reproduces it identically, and rules out every
@@ -431,6 +449,7 @@ class _PlainTextEditor(QPlainTextEdit):
             document = QTextDocument(self)
             document.setDocumentLayout(QPlainTextDocumentLayout(document))
         self.setDocument(document)
+        self.set_word_wrap(word_wrap.is_enabled())
         self.path: Path | None = None
         self._highlighter: JsonSyntaxHighlighter | MegaloSyntaxHighlighter | None = None
         self._fold_ranges: dict[int, int] = {}
@@ -495,6 +514,28 @@ class _PlainTextEditor(QPlainTextEdit):
         # textChanged for yet.
         self._on_text_changed()
 
+    def set_word_wrap(self, enabled: bool) -> None:
+        """Wraps long lines at the view's edge when ``enabled``; otherwise (the default) leaves them on one row and
+        lets the horizontal scrollbar reach the rest."""
+        mode = QPlainTextEdit.LineWrapMode.WidgetWidth if enabled else QPlainTextEdit.LineWrapMode.NoWrap
+        self.setLineWrapMode(mode)
+        self.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAsNeeded)
+
+    def refresh_theme(self, base_color: QColor | None = None) -> None:
+        """Recolours this editor for a theme switch without touching its text: the syntax highlighter picks a light or
+        dark token palette from the editor's background when it is built, so it has to be told about the new one.
+        ``base_color`` is the new theme's base colour -- passed in by the caller because a widget's own palette only
+        updates once the palette-change event has been processed, which hasn't happened yet by the time a
+        theme-switch callback runs."""
+        if base_color is None:
+            base_color = self.palette().color(QPalette.ColorRole.Base)
+        if self._highlighter is not None:
+            self._highlighter.set_base_color(base_color)
+        for sibling in (self._line_number_area, self._minimap, self._breadcrumb):
+            if sibling is not None:
+                sibling.update()
+        self.viewport().update()
+
     def refresh_font_scale(self) -> None:
         """(Re-)applies :data:`FONT_SCALE` on top of the app's current (zoom-scaled) font for
         :data:`ENLARGED_FILENAMES` specifically -- every other file just gets the plain app font.
@@ -507,13 +548,12 @@ class _PlainTextEditor(QPlainTextEdit):
         app = QApplication.instance()
         if app is None:
             return
-        base_font = app.font()
+        font = QFont(app.font())
         if self.path is not None and self.path.name in ENLARGED_FILENAMES:
-            font = QFont(base_font)
             font.setPointSizeF(font.pointSizeF() * FONT_SCALE)
-            self.setFont(font)
-        else:
-            self.setFont(base_font)
+        font.setWordSpacing(0.0)
+        font.setWordSpacing(QFontMetricsF(font).horizontalAdvance(" ") * _SPACE_EXTRA)
+        self.setFont(font)
         # The gutter column's own width is a cached sizeHint(), only ever recomputed when
         # _on_text_changed() (block count) fires -- a font-only change (the +10% enlarged-filename
         # bump above, or a live zoom change re-applying it to an already-loaded tab) never touches
@@ -825,35 +865,6 @@ class _PlainTextEditor(QPlainTextEdit):
             if start <= char_pos < end:
                 return message
         return None
-
-    def paintEvent(self, event: QPaintEvent) -> None:
-        super().paintEvent(event)
-        self._draw_indent_guides(event)
-
-    def _draw_indent_guides(self, event: QPaintEvent) -> None:
-        """Thin vertical lines through the viewport at each indentation level -- drawn *after* the
-        base text (super().paintEvent() above) so they sit visually behind the glyphs rather than
-        painting over them, same layering ``QPlainTextEdit``'s own selection/current-line
-        highlighting uses."""
-        space_width = self.fontMetrics().horizontalAdvance(" ")
-        if space_width <= 0:
-            return
-
-        painter = QPainter(self.viewport())
-        painter.setPen(self.palette().color(QPalette.ColorGroup.Disabled, QPalette.ColorRole.WindowText))
-        base_x = self.contentOffset().x()
-
-        block = self.firstVisibleBlock()
-        top = round(self.blockBoundingGeometry(block).translated(self.contentOffset()).top())
-        while block.isValid() and top <= event.rect().bottom():
-            bottom = top + round(self.blockBoundingRect(block).height())
-            if block.isVisible() and bottom >= event.rect().top():
-                for level in range(1, _indent_level(block.text()) + 1):
-                    x = round(base_x + level * _INDENT_SIZE * space_width)
-                    painter.drawLine(x, top, x, bottom)
-            block = block.next()
-            top = bottom
-        painter.end()
 
     def paint_line_numbers(self, event: QPaintEvent) -> None:
         """Draws every visible block's 1-based line number, right-aligned, plus a fold-arrow

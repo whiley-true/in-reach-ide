@@ -41,9 +41,15 @@ IDE's "Verify System Settings" -- Tesseract on `PATH`, the Steam / Halo: MCC / g
   until actually available), a fixed, reorderable activity bar (`activity_bar.py`) with an overflow
   "..." popout once its icons don't fit, a split-capable tab panel (`tabs.py`, up to 3 side-by-side
   pane-groups x 2 stacked panes, plus any number of single-pane popout windows a tab can be dragged
-  or right-click-moved out into) and OS file dialogs that always open on the IDE's own current
+  or right-click-moved out into, each with its own bottom status bar showing Ln/Col and Spaces for a
+  text tab, wired through `MainPanelArea.on_cursor_info`) and OS file dialogs that always open on the IDE's own current
   screen (`file_dialogs.py`), a text/JSON/Markdown editor (`editor.py`, `markdown_preview.py`) with
-  a VSCode-style Find/Replace bar (`find_replace.py`), primary-sidebar
+  a VSCode-style Find/Replace bar (`find_replace.py`) -- spaces drawn wider than the font's own, no line
+  wrapping by default (a long line scrolls under a horizontal scrollbar) and "Toggle Word Wrap" (Alt+Z,
+  `word_wrap.py`: one switch for every editor, persisted to the `.env`) to opt in; the bottom bar's Ln/Col/Spaces
+  segments show for `.txt`/`.json`/`.mgl` tabs (`editor.shows_cursor_info`); a theme switch re-picks every open
+  editor's and diff tab's syntax colours in place (`MainPanelArea.refresh_theme`) without saving or reloading
+  anything -- primary-sidebar
   panels, each under one shared bold title strip naming whichever view is showing
   (`MainWindow.sidebar_header`), (Dashboard/Welcome `welcome.py`, Explorer `explorer.py` -- also
   owns the Quick Launch section (the Export File/Launch RVT/View Compiled button row, plus

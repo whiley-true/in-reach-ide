@@ -39,6 +39,12 @@ class JsonSyntaxHighlighter(QSyntaxHighlighter):
         super().__init__(document)
         self._formats = self._build_formats(base_color)
 
+    def set_base_color(self, base_color: QColor) -> None:
+        """Re-picks the light or dark token palette for a new editor background (a theme switch) and recolours every
+        line -- the document's text and modified state are untouched."""
+        self._formats = self._build_formats(base_color)
+        self.rehighlight()
+
     def _build_formats(self, base_color: QColor) -> dict[str, QTextCharFormat]:
         key_hex, string_hex, number_hex, literal_hex = _DARK_COLORS if _is_dark(base_color) else _LIGHT_COLORS
         formats = {}
