@@ -179,6 +179,11 @@ def test_budget_rows_list_pools_tables_and_measured_counters() -> None:
     assert budget_rows({}) == []
 
 
+def _with_release(folder: Path) -> Path:
+    (folder / "script" / "env" / "release.env").write_text("FLAGS=RELEASE\nSCORE_TO_WIN=50\n", encoding="utf-8")
+    return folder
+
+
 def test_the_scripts_view_shows_a_script_projects_modules_blocks_budget_and_fusion(qtbot, tmp_path: Path) -> None:
     folder = _linked_project(tmp_path)
     result = link(folder, write=False)
@@ -186,10 +191,11 @@ def test_the_scripts_view_shows_a_script_projects_modules_blocks_budget_and_fusi
     qtbot.addWidget(panel)
     panel.show()
 
-    panel.show_link(folder, result, ["dev", "release"], "dev")
+    panel.show_link(folder, result, api.envs(folder))
 
-    assert panel.linked_box.isVisible() and not panel.unlinked_box.isVisible()
-    assert panel.status_label.text() == "Links cleanly."
+    assert panel.linked_box.isVisible() and panel.fusion_box.isVisible() and not panel.single_box.isVisible()
+    assert panel.envs_box.isVisible() and panel.budget_box.isVisible()
+    assert panel.status_label.text() == "Checks cleanly."
     assert [panel.modules_tree.topLevelItem(i).text(0) for i in range(2)] == ["hill_score 1.0.0", "hill_buff 0.0.0"]
     assert panel.modules_tree.topLevelItem(0).text(1) == "HILL_PASS"
     assert [panel.blocks_tree.topLevelItem(i).text(0) for i in range(3)] == ["SETUP", "HILL_PASS", "WIN_CHECK"]
@@ -199,28 +205,87 @@ def test_the_scripts_view_shows_a_script_projects_modules_blocks_budget_and_fusi
     assert "HILL_PASS: hill_score.score + hill_buff.buff" in panel.fusion_tree.topLevelItem(0).text(0)
 
 
-def test_the_profile_picker_lists_profiles_marks_the_active_one_and_reports_a_pick(qtbot, tmp_path: Path) -> None:
+def test_the_envs_section_lists_each_env_with_its_flags_and_constants_and_marks_the_active_one(qtbot, tmp_path: Path) -> None:
+    folder = _with_release(_linked_project(tmp_path))
+    script_preprocess.set_active_env(folder, "release")
+    panel = ScriptsPanel()
+    qtbot.addWidget(panel)
+
+    panel.show_link(folder, link(folder, write=False), api.envs(folder))
+
+    assert panel.env_names() == ["dev", "release", None]
+    rows = [[panel.envs_tree.topLevelItem(i).text(c) for c in range(3)] for i in range(3)]
+    assert rows[0] == ["dev", "DEV", "SCORE_TO_WIN=5"]
+    assert rows[1] == ["release  (active)", "RELEASE", "SCORE_TO_WIN=50"]
+    assert rows[2][0] == "(no env)"
+    assert panel.envs_tree.topLevelItem(1).font(0).bold() and not panel.envs_tree.topLevelItem(0).font(0).bold()
+
+
+def test_an_env_that_does_not_parse_says_why(qtbot, tmp_path: Path) -> None:
+    folder = _linked_project(tmp_path)
+    (folder / "script" / "env" / "broken.env").write_text("SCORE=oops oops\n", encoding="utf-8")
+    panel = ScriptsPanel()
+    qtbot.addWidget(panel)
+
+    panel.show_link(folder, link(folder, write=False), api.envs(folder))
+
+    row = panel.envs_tree.topLevelItem(panel.env_names().index("broken"))
+    assert row.text(1) == "invalid" and row.text(2).startswith("line 1:")
+
+
+def test_the_env_buttons_report_what_to_do_with_the_selected_env(qtbot, tmp_path: Path) -> None:
+    folder = _with_release(_linked_project(tmp_path))
+    panel = ScriptsPanel()
+    qtbot.addWidget(panel)
+    panel.show_link(folder, link(folder, write=False), api.envs(folder))
+
+    panel.select_env("release")
+    with qtbot.waitSignal(panel.env_selected) as used:
+        panel.env_use_button.click()
+    with qtbot.waitSignal(panel.env_edit_requested) as edited:
+        panel.env_edit_button.click()
+    with qtbot.waitSignal(panel.env_delete_requested) as deleted:
+        panel.env_delete_button.click()
+    with qtbot.waitSignal(panel.env_new_requested):
+        panel.env_new_button.click()
+
+    assert used.args == ["release"] and edited.args == ["release"] and deleted.args == ["release"]
+
+
+def test_the_no_env_row_can_be_used_but_not_edited_or_deleted(qtbot, tmp_path: Path) -> None:
     folder = _linked_project(tmp_path)
     panel = ScriptsPanel()
     qtbot.addWidget(panel)
-    panel.show_link(folder, link(folder, write=False), ["dev", "release"], "release")
+    panel.show_link(folder, link(folder, write=False), api.envs(folder))
 
-    assert [panel.profile_combo.itemText(i) for i in range(panel.profile_combo.count())] == ["dev", "release", "No profile"]
-    assert panel.profile_combo.currentText() == "release"
+    panel.select_env(None)
 
-    with qtbot.waitSignal(panel.profile_selected) as signal:
-        panel.profile_combo.activated.emit(0)
-    assert signal.args == ["dev"]
-    with qtbot.waitSignal(panel.profile_selected) as signal:
-        panel.profile_combo.activated.emit(2)
-    assert signal.args == [None]
+    assert panel.env_use_button.isEnabled()
+    assert not panel.env_edit_button.isEnabled() and not panel.env_delete_button.isEnabled()
+    with qtbot.waitSignal(panel.env_selected) as used:
+        panel.env_use_button.click()
+    assert used.args == [None]
+
+
+def test_double_clicking_an_env_edits_it_and_the_no_env_row_uses_none(qtbot, tmp_path: Path) -> None:
+    folder = _linked_project(tmp_path)
+    panel = ScriptsPanel()
+    qtbot.addWidget(panel)
+    panel.show_link(folder, link(folder, write=False), api.envs(folder))
+
+    with qtbot.waitSignal(panel.env_edit_requested) as edited:
+        panel.envs_tree.itemActivated.emit(panel.envs_tree.topLevelItem(0), 0)
+    with qtbot.waitSignal(panel.env_selected) as used:
+        panel.envs_tree.itemActivated.emit(panel.envs_tree.topLevelItem(1), 0)
+
+    assert edited.args == ["dev"] and used.args == [None]
 
 
 def test_a_module_row_opens_its_first_file(qtbot, tmp_path: Path) -> None:
     folder = _linked_project(tmp_path)
     panel = ScriptsPanel()
     qtbot.addWidget(panel)
-    panel.show_link(folder, link(folder, write=False), [], None)
+    panel.show_link(folder, link(folder, write=False), api.envs(folder))
 
     with qtbot.waitSignal(panel.open_file_requested) as signal:
         panel.modules_tree.itemActivated.emit(panel.modules_tree.topLevelItem(0), 0)
@@ -235,7 +300,7 @@ def test_a_link_that_fails_says_so_and_a_near_full_pool_is_flagged(qtbot, tmp_pa
     panel = ScriptsPanel()
     qtbot.addWidget(panel)
 
-    panel.show_link(folder, bad, [], None)
+    panel.show_link(folder, bad, api.envs(folder))
 
     assert panel.status_label.text().startswith("1 error")
     warn, over = panel.budget_tree.topLevelItem(0), panel.budget_tree.topLevelItem(1)
@@ -250,30 +315,49 @@ def test_an_empty_link_map_and_nothing_to_fuse_say_so(qtbot, tmp_path: Path) -> 
     panel = ScriptsPanel()
     qtbot.addWidget(panel)
 
-    panel.show_link(folder, result, [], None)
+    panel.show_link(folder, result, api.envs(folder))
 
     assert panel.budget_tree.topLevelItem(0).text(0) == "nothing linked yet"
     assert panel.fusion_tree.topLevelItem(0).text(0) == "nothing to fuse"
 
 
-def test_a_single_file_project_offers_to_create_a_script_project(qtbot, tmp_path: Path) -> None:
+def test_a_single_file_shows_its_state_envs_budget_and_the_convert_button(qtbot, tmp_path: Path) -> None:
+    folder = _single_file_project(tmp_path)
+    (folder / "script" / "output.txt").write_text("-- @number g_score\ng_score = 1\n", encoding="utf-8")
     panel = ScriptsPanel()
     qtbot.addWidget(panel)
     panel.show()
 
-    panel.show_unlinked(_single_file_project(tmp_path))
+    panel.show_single(folder, link(folder, write=False), api.envs(folder))
 
-    assert panel.unlinked_box.isVisible() and not panel.linked_box.isVisible()
-    with qtbot.waitSignal(panel.create_project_requested):
-        panel.create_button.click()
+    assert panel.single_box.isVisible() and panel.envs_box.isVisible() and panel.budget_box.isVisible()
+    assert not panel.linked_box.isVisible() and not panel.fusion_box.isVisible()
+    assert panel.status_label.text() == "Checks cleanly."
+    assert panel.budget_tree.topLevelItem(0).text(0) == "global.number"
+    assert "experimental" in panel.convert_button.text().lower()
+    with qtbot.waitSignal(panel.convert_requested):
+        panel.convert_button.click()
+    with qtbot.waitSignal(panel.check_requested):
+        panel.single_check_button.click()
 
 
-def test_no_project_shows_neither_box(qtbot) -> None:
+def test_a_single_file_with_nothing_declared_says_so_in_the_budget(qtbot, tmp_path: Path) -> None:
+    folder = _single_file_project(tmp_path)
+    (folder / "script" / "output.txt").write_text("game.end_round()\n", encoding="utf-8")  # no slot used at all
+    panel = ScriptsPanel()
+    qtbot.addWidget(panel)
+
+    panel.show_single(folder, link(folder, write=False), api.envs(folder))
+
+    assert panel.budget_tree.topLevelItem(0).text(0) == "nothing declared yet"
+
+
+def test_no_project_shows_nothing(qtbot) -> None:
     panel = ScriptsPanel()
     qtbot.addWidget(panel)
     panel.show()
 
-    assert not panel.unlinked_box.isVisible() and not panel.linked_box.isVisible()
+    assert not any(box.isVisible() for box in (panel.single_box, panel.linked_box, panel.envs_box, panel.budget_box))
 
 
 # -- in the window ----------------------------------------------------------------------------------------
@@ -287,10 +371,20 @@ def test_opening_a_script_project_fills_the_scripts_view_and_leaves_problems_emp
     assert project_window.bottom_panel.tabText(1) == "Problems"
 
 
-def test_opening_a_single_file_project_shows_the_offer_to_create_one(project_window, tmp_path: Path) -> None:
+def test_opening_a_single_file_project_shows_the_single_file_view(project_window, tmp_path: Path) -> None:
     project_window._on_project_opened(_single_file_project(tmp_path))
 
-    assert not project_window.scripts_panel.unlinked_box.isHidden()
+    assert not project_window.scripts_panel.single_box.isHidden() and project_window.scripts_panel.linked_box.isHidden()
+
+
+def test_a_single_files_problems_are_listed_when_it_opens(project_window, tmp_path: Path) -> None:
+    folder = _single_file_project(tmp_path)
+    (folder / "script" / "output.txt").write_text("-- @number a\n-- @number a\n", encoding="utf-8")
+
+    project_window._on_project_opened(folder)
+
+    [problem] = project_window.bottom_panel.problems_panel.problems()
+    assert (problem.code, problem.path, problem.line) == ("IR006", folder / "script" / "output.txt", 2)
 
 
 def test_saving_a_broken_module_lists_the_problem_and_counts_it_in_the_tab(project_window, tmp_path: Path) -> None:
@@ -330,15 +424,15 @@ def test_activating_a_problem_opens_the_file_at_its_line(project_window, tmp_pat
     assert editor.textCursor().blockNumber() == 3  # 0-based -- line 4
 
 
-def test_switching_profile_relinks(project_window, tmp_path: Path) -> None:
-    folder = _linked_project(tmp_path)
-    (folder / "script" / "env" / "release.env").write_text("FLAGS=RELEASE\n", encoding="utf-8")
+def test_switching_env_relinks(project_window, tmp_path: Path) -> None:
+    folder = _with_release(_linked_project(tmp_path))
     project_window._on_project_opened(folder)
 
-    project_window._set_build_profile("release")
+    project_window._set_env("release")
 
-    assert script_preprocess.active_profile_name(folder) == "release"
-    assert project_window.scripts_panel.profile_combo.currentText() == "release"
+    assert script_preprocess.active_env_name(folder) == "release"
+    panel = project_window.scripts_panel
+    assert panel.envs_tree.topLevelItem(panel.env_names().index("release")).text(0) == "release  (active)"
 
 
 def test_check_script_project_shows_the_problems_tab_when_there_are_some(project_window, tmp_path: Path) -> None:
@@ -351,14 +445,16 @@ def test_check_script_project_shows_the_problems_tab_when_there_are_some(project
     assert project_window.bottom_panel.currentWidget() is project_window.bottom_panel.problems_panel
 
 
-def test_check_script_project_on_a_single_file_project_explains(project_window, tmp_path: Path, monkeypatch) -> None:
-    shown = []
-    monkeypatch.setattr(QMessageBox, "information", lambda *a, **k: shown.append(a[2]))
-    project_window._on_project_opened(_single_file_project(tmp_path))
+def test_check_script_on_a_single_file_project_lists_its_problems(project_window, tmp_path: Path) -> None:
+    folder = _single_file_project(tmp_path)
+    project_window._on_project_opened(folder)
+    (folder / "script" / "output.txt").write_text("x = true\n", encoding="utf-8")
+    project_window.bottom_panel.setCurrentIndex(0)
 
     project_window.check_script_project()
 
-    assert len(shown) == 1 and "single file" in shown[0]
+    assert [p.code for p in project_window.bottom_panel.problems_panel.problems()] == ["IR007"]
+    assert project_window.bottom_panel.currentWidget() is project_window.bottom_panel.problems_panel
 
 
 def test_link_script_project_writes_the_build_files_without_compiling(project_window, tmp_path: Path) -> None:
@@ -383,12 +479,12 @@ def test_a_link_that_fails_brings_the_problems_tab_forward(project_window, tmp_p
     assert not (folder / "build" / "Compiled.txt").exists()
 
 
-def test_create_script_project_turns_a_single_script_into_one(project_window, tmp_path: Path, monkeypatch) -> None:
+def test_convert_to_project_turns_a_single_script_into_one(project_window, tmp_path: Path, monkeypatch) -> None:
     folder = _single_file_project(tmp_path)
     project_window._on_project_opened(folder)
-    monkeypatch.setattr(project_window, "_confirm_create_script_project", lambda: True)
+    monkeypatch.setattr(project_window, "_confirm_convert_to_project", lambda: "convert")
 
-    project_window.create_script_project()
+    project_window.convert_to_project()
 
     assert is_linked(folder) and (folder / "script" / "blocks" / "main.mgl").read_text(encoding="utf-8") == "global.number[0] = 1\n"
     assert not project_window.scripts_panel.linked_box.isHidden()
@@ -397,14 +493,45 @@ def test_create_script_project_turns_a_single_script_into_one(project_window, tm
     )
 
 
-def test_declining_create_script_project_changes_nothing(project_window, tmp_path: Path, monkeypatch) -> None:
+def test_cancelling_convert_to_project_changes_nothing(project_window, tmp_path: Path, monkeypatch) -> None:
     folder = _single_file_project(tmp_path)
     project_window._on_project_opened(folder)
-    monkeypatch.setattr(project_window, "_confirm_create_script_project", lambda: False)
+    monkeypatch.setattr(project_window, "_confirm_convert_to_project", lambda: "cancel")
 
-    project_window.create_script_project()
+    project_window.convert_to_project()
 
     assert not is_linked(folder)
+
+
+def test_backing_up_before_converting_copies_script_first_and_says_where(project_window, tmp_path: Path, monkeypatch) -> None:
+    folder = _single_file_project(tmp_path)
+    project_window._on_project_opened(folder)
+    monkeypatch.setattr(project_window, "_confirm_convert_to_project", lambda: "backup")
+    reported = []
+    monkeypatch.setattr(project_window, "_report_backup", reported.append)
+
+    project_window.convert_to_project()
+
+    [backup] = reported
+    assert is_linked(folder) and backup.parent == tmp_path / ".in-reach" / "backups" / folder.name
+    assert (backup / "output.txt").read_text(encoding="utf-8") == "global.number[0] = 1\n"
+    assert not (backup / "project.toml").exists()  # copied before converting
+
+
+def test_the_convert_dialog_is_marked_experimental_and_recommends_a_backup(project_window, monkeypatch) -> None:
+    seen = {}
+
+    def fake_exec(box):
+        seen["title"], seen["info"] = box.windowTitle(), box.informativeText()
+        seen["buttons"] = [button.text() for button in box.buttons()]
+        seen["default"] = box.defaultButton().text()
+        return 0
+
+    monkeypatch.setattr(QMessageBox, "exec", fake_exec)
+
+    assert project_window._confirm_convert_to_project() == "cancel"  # nothing clicked
+    assert "experimental" in seen["title"].lower() and "backup" in seen["info"].lower()
+    assert seen["default"] == "Back Up && Convert" and "Convert" in seen["buttons"]
 
 
 def test_new_script_module_adds_it_and_opens_its_file(project_window, tmp_path: Path, monkeypatch) -> None:
@@ -476,7 +603,10 @@ def test_a_single_file_projects_failed_build_points_at_output_txt(project_window
 def test_the_new_commands_are_in_the_palette_and_the_view_menu(project_window) -> None:
     labels = {c.label for c in project_window.build_command_palette_commands()}
 
-    assert {"View Problems", "Check Script Project", "Link Script Project", "Create Script Project", "New Script Module"} <= labels
+    assert {
+        "View Problems", "Check Script", "Link Script Project", "Convert to Project (experimental)", "New Script Module",
+        "Select Env", "New Env", "Open Documentation Overview",
+    } <= labels
     view_menu = project_window.top_bar.view_menu_button.menu()
     assert "View Problems" in [a.text() for a in view_menu.actions()]
 
@@ -523,16 +653,27 @@ def test_view_decompiled_opens_the_decompiled_script_read_only(project_window, t
     assert editor.path == decompiled and "for each player" in editor.toPlainText()
 
 
-def test_the_dashboard_button_and_palette_entry_open_the_decompiled_view(project_window, monkeypatch) -> None:
+def test_the_scripts_view_button_and_palette_entry_open_the_decompiled_view(project_window, tmp_path: Path, monkeypatch) -> None:
+    project_window._on_project_opened(_single_file_project(tmp_path))
     calls = []
-    monkeypatch.setattr(project_window, "view_decompiled", lambda: calls.append(True))
-    project_window.explorer_panel.view_decompiled_requested.disconnect()
-    project_window.explorer_panel.view_decompiled_requested.connect(lambda: calls.append("button"))
+    project_window.scripts_panel.view_decompiled_requested.disconnect()
+    project_window.scripts_panel.view_decompiled_requested.connect(lambda: calls.append("button"))
 
-    project_window.explorer_panel.view_decompiled_button.click()
+    assert not project_window.scripts_panel.decompiled_button.isHidden()
+    project_window.scripts_panel.decompiled_button.click()
 
     assert calls == ["button"]
     assert "View Decompiled" in {c.label for c in project_window.build_command_palette_commands()}
+
+
+def test_the_scripts_view_paints_no_background_of_its_own_over_the_sidebar_border(qtbot) -> None:
+    from PyQt6.QtWidgets import QScrollArea
+
+    panel = ScriptsPanel()
+    qtbot.addWidget(panel)
+    scroll = panel.findChild(QScrollArea)
+
+    assert not scroll.autoFillBackground() and not scroll.viewport().autoFillBackground()
 
 
 def test_view_decompiled_with_no_project_does_nothing(project_window) -> None:
@@ -545,7 +686,7 @@ def test_view_decompiled_with_no_project_does_nothing(project_window) -> None:
 def _panel_for(qtbot, folder: Path) -> ScriptsPanel:
     panel = ScriptsPanel()
     qtbot.addWidget(panel)
-    panel.show_link(folder, link(folder, write=False), ["dev"], "dev")
+    panel.show_link(folder, link(folder, write=False), api.envs(folder))
     return panel
 
 
@@ -566,7 +707,7 @@ def test_every_module_has_a_ticked_checkbox_and_filling_the_view_emits_nothing(q
     seen = []
     panel.module_toggled.connect(lambda *a: seen.append(a))
 
-    panel.show_link(folder, link(folder, write=False), [], None)
+    panel.show_link(folder, link(folder, write=False), api.envs(folder))
 
     assert {name: on for name, (_, on) in _module_items(panel).items()} == {"hill_score": True, "hill_buff": True} and seen == []
 
@@ -627,7 +768,7 @@ def test_rebuilding_the_tree_is_not_reported_as_a_reorder(qtbot, tmp_path: Path)
     seen = []
     panel.blocks_reordered.connect(lambda order: seen.append(order))
 
-    panel.show_link(folder, link(folder, write=False), [], None)
+    panel.show_link(folder, link(folder, write=False), api.envs(folder))
 
     assert seen == []
 

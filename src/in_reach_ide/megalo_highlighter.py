@@ -9,7 +9,7 @@ the module layer make significant:
   ``and``/``or``/``not``/``inline``) and the built-in roots (``current_player``, ``global``, ``temporaries``, ...);
 * strings, numbers and percentages;
 * ``--`` comments -- and inside them the metadata that isn't a comment at all: ``-- @fragment``, ``-- @number`` and the
-  other annotations, and the build-profile directives ``-- @if FLAG`` / ``-- @else`` / ``-- @end``, each coloured on
+  other annotations, and the env directives ``-- @if FLAG`` / ``-- @else`` / ``-- @end``, each coloured on
   its own;
 * ``${NAME}`` placeholders, in code and in annotation arguments alike.
 

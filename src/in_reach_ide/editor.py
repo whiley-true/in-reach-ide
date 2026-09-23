@@ -47,6 +47,7 @@ margins at all.
 from __future__ import annotations
 
 import json
+import re
 from pathlib import Path
 
 from PyQt6.QtCore import QPoint, QPointF, QRectF, QSize, Qt, pyqtSignal
@@ -165,6 +166,19 @@ def _find_project_title(path: Path) -> str | None:
         if (ancestor / new_project.NOTES_FILENAME).is_file():
             return new_project.read_project_title(ancestor)
     return None
+
+
+#: ``(path, name) -> text or None``: what hovering a name in a Megalo file shows (see :meth:`_PlainTextEditor._hover_text_at`).
+#: Set by the window (:func:`set_megalo_hover_provider`), since only it knows the active project's documentation.
+_megalo_hover_provider = None
+_DOTTED_NAME = re.compile(r"[A-Za-z0-9_][A-Za-z0-9_-]*\.[A-Za-z0-9_][A-Za-z0-9_-]*")
+_WORD = re.compile(r"[A-Za-z0-9_][A-Za-z0-9_-]*")
+
+
+def set_megalo_hover_provider(provider) -> None:
+    """Sets (``None``: clears) what every editor asks when the pointer rests on a name in a Megalo file."""
+    global _megalo_hover_provider
+    _megalo_hover_provider = provider
 
 
 def is_megalo_path(path: Path | None) -> bool:
@@ -836,6 +850,8 @@ class _PlainTextEditor(QPlainTextEdit):
         # always-on banner, so a valid file never loses any space to it and the message only shows
         # up right where the problem actually is.
         message = self._error_message_at(event.pos())
+        if message is None:
+            message = self._hover_text_at(event.pos())
         if message is not None:
             QToolTip.showText(event.globalPosition().toPoint(), message, self)
         else:
@@ -845,6 +861,29 @@ class _PlainTextEditor(QPlainTextEdit):
     def leaveEvent(self, event) -> None:  # noqa: ANN001 -- QEvent
         QToolTip.hideText()
         super().leaveEvent(event)
+
+    def _hover_text_at(self, pos: QPoint) -> str | None:
+        """What :data:`_megalo_hover_provider` says about the name under ``pos`` in a Megalo file -- a storage name's slot
+        and ``@doc``, a resource's table entry, a fragment, block, module or tag -- or ``None``. A dotted name
+        (``hill_score.score``) is tried whole first, then the single word under the pointer (``p_second`` in
+        ``current_player.p_second``)."""
+        provider = _megalo_hover_provider
+        if provider is None or not is_megalo_path(self.path):
+            return None
+        cursor = self.cursorForPosition(pos)
+        # cursorForPosition() snaps to the nearest character: only answer when the pointer is really over the line's text.
+        if pos.x() > self.cursorRect(cursor).right() + self.fontMetrics().horizontalAdvance("M"):
+            return None
+        text = cursor.block().text()
+        column = cursor.positionInBlock()
+        for pattern in (_DOTTED_NAME, _WORD):
+            for match in pattern.finditer(text):
+                if match.start() <= column <= match.end():
+                    found = provider(self.path, match.group())
+                    if found:
+                        return found
+                    break
+        return None
 
     def _error_message_at(self, pos: QPoint) -> str | None:
         """The schema-error message covering the character under ``pos`` (viewport coordinates),

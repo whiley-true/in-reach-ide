@@ -13,7 +13,7 @@ import click
 from in_reach import api
 
 #: The range of ``in_reach.api.API_VERSION`` this IDE was written against (inclusive).
-SUPPORTED_API_VERSIONS = (1, 1)
+SUPPORTED_API_VERSIONS = (2, 2)
 
 
 def check_environment() -> None:

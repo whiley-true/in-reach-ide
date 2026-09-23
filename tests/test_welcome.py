@@ -193,6 +193,29 @@ def test_new_blank_project_scaffolds_a_folder_and_lands_in_recent(
     bin_path = new_project.source_variant_path(welcome.project_dir, folder)
     assert bin_path.is_file()
     assert (folder / "script" / "output.txt").is_file()
+    # ... and it is built once straight away, so "View Decompiled" has a .bin to show.
+    assert new_project.compiled_variant_path(folder).is_file()
+
+
+def test_a_first_build_that_fails_is_reported_and_the_project_still_opens(
+    welcome: WelcomeTab, root_dir: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    from in_reach import api
+
+    def accept(dialog: NewProjectDialog) -> int:
+        dialog.title_edit.setText("Broken First Build")
+        return QDialog.DialogCode.Accepted
+
+    monkeypatch.setattr(NewProjectDialog, "exec", accept)
+    monkeypatch.setattr(api, "initial_build", lambda folder: api.BuildOutcome(False, failure="it broke"))
+    warned: list[str] = []
+    monkeypatch.setattr("in_reach_ide.welcome.QMessageBox.warning", lambda *args, **kwargs: warned.append(args[2]))
+    opened: list[Path] = []
+    welcome.project_opened.connect(opened.append)
+
+    welcome.new_blank_button.click()
+
+    assert len(opened) == 1 and len(warned) == 1 and "it broke" in warned[0]
 
 
 @_NEEDS_NATIVE_RVT
@@ -265,6 +288,7 @@ def test_new_project_from_a_built_in_variant_copies_it_in(
     # .bins are just placeholder bytes, not a real Reach variant, and the real native extension
     # failing to parse one would otherwise surface as a warning dialog mid-test.
     monkeypatch.setattr(new_project, "_decompile_source_variant", lambda *args, **kwargs: None)
+    monkeypatch.setattr(WelcomeTab, "_initial_build", lambda self, folder: None)  # nothing real to build either
     standard = root_dir / "game_variants"
     hopper = root_dir / "hopper_game_variants"
     standard.mkdir()

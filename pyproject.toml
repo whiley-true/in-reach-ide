@@ -13,7 +13,7 @@ authors = [{ name = "Whiley True", email = "inreach.python@gmail.com" }]
 dependencies = [
     # The core library and CLI, which carries the native module. The IDE calls only in_reach.api (plus the
     # framework-agnostic in_reach.app modules it was built on); API_VERSION says when that changed incompatibly.
-    "in-reach>=0.3.0,<0.5",
+    "in-reach>=0.4.0,<0.5",  # API_VERSION 2: envs, check_text, docs
     # System detection (Tesseract on PATH, the Steam / Halo: MCC folders) that "Verify System Settings" runs.
     "within-reach>=0.2.0,<0.3",
     "PyQt6==6.11.0",

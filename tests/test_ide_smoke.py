@@ -4667,6 +4667,47 @@ def test_convert_indentation_with_a_selection_only_touches_the_selected_lines(
     assert editor.toPlainText() == "\tfoo\n    bar\n\tbaz\n"
 
 
+def test_convert_indentation_to_tabs_on_megalo_script_text_uses_its_own_fixed_three_space_width(
+    project_window: MainWindow, tmp_path: Path
+) -> None:
+    # Megalo script text's own indent step is a fixed 3 spaces (unparse.py's own INDENT) -- not a
+    # per-project style choice like JSON's -- so converting it to tabs must use that width, never
+    # the app's general tab-width preference: converting by that instead (default 4) left a
+    # genuinely one-level-deep line's 3 spaces short of one full group, so it silently didn't
+    # convert at all.
+    from in_reach_ide import indent_settings
+    from in_reach_ide import indent_state
+
+    indent_state.set_indent(indent_settings.STYLE_SPACES, 4)
+    path = tmp_path / "main.mgl"
+    path.write_text("if global.number[0] == 0 then \n   temporaries.number[0] = 0\nend\n", encoding="utf-8")
+    project_window.main_panel.active_pane.open_file(path)
+    editor = project_window.main_panel.active_pane.currentWidget()
+
+    project_window._convert_active_indentation(to_spaces=False)
+
+    assert editor.toPlainText() == "if global.number[0] == 0 then \n\ttemporaries.number[0] = 0\nend\n"
+
+
+def test_convert_indentation_to_tabs_on_a_non_megalo_file_still_uses_the_general_preference(
+    project_window: MainWindow, tmp_path: Path
+) -> None:
+    # The fixed-3-space override above is Megalo-specific -- an ordinary file keeps using whatever
+    # width the app's general tab-width preference is set to, same as before.
+    from in_reach_ide import indent_settings
+    from in_reach_ide import indent_state
+
+    indent_state.set_indent(indent_settings.STYLE_SPACES, 3)
+    path = tmp_path / "notes.txt"
+    path.write_text("   foo\n", encoding="utf-8")
+    project_window.main_panel.active_pane.open_file(path)
+    editor = project_window.main_panel.active_pane.currentWidget()
+
+    project_window._convert_active_indentation(to_spaces=False)
+
+    assert editor.toPlainText() == "\tfoo\n"
+
+
 def test_detect_indentation_action_updates_the_live_state_and_persists_it(
     project_window: MainWindow, tmp_path: Path
 ) -> None:

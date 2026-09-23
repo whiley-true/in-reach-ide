@@ -22,6 +22,7 @@ from pathlib import Path
 from PyQt6.QtCore import Qt, pyqtSignal
 from PyQt6.QtGui import QPalette
 from PyQt6.QtWidgets import (
+    QApplication,
     QDialog,
     QFrame,
     QGridLayout,
@@ -421,7 +422,28 @@ class WelcomeTab(QWidget):
             return
         if category_warning:
             QMessageBox.warning(self, "in-reach", category_warning)
+        self._initial_build(folder)
         self._open_project(folder)
+
+    def _initial_build(self, folder: Path) -> None:
+        """Builds a just-created project once (:func:`in_reach.api.initial_build`), so it starts with its ``.bin``, its
+        decompiled view and its documentation -- "View Decompiled" never says nothing has been built. A failed build
+        is reported and the project still opens (Apply shows the problems). A test seam."""
+        from in_reach import api
+
+        QApplication.setOverrideCursor(Qt.CursorShape.WaitCursor)
+        try:
+            outcome = api.initial_build(folder)
+        except api.ApiError:
+            return  # no native module: nothing could be built, and creating the project already said so
+        finally:
+            QApplication.restoreOverrideCursor()
+        if not outcome.success:
+            QMessageBox.warning(
+                self, "in-reach",
+                f"The project was created, but its first build failed:\n{outcome.failure or 'see the Problems tab'}\n\n"
+                "Apply builds it again and shows why.",
+            )
 
     def _open_project(self, folder: Path) -> None:
         recent.add_recent(self.project_dir, folder)

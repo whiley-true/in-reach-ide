@@ -1,12 +1,20 @@
-"""The primary sidebar's "Scripts" view (the bookshelf icon): the active project's script project at a glance.
+"""The primary sidebar's "Scripts" view (the bookshelf icon): the active project's script at a glance.
 
-For a *linked* project (one with ``script/project.toml``) it shows the build profile (and switches it), the modules and
-which blocks they contribute to, the engine budget -- every storage pool, resource table and the trigger/condition/action
-counters the last build measured, each against its cap -- and what fusion did (merged triggers, and every merge it
-declined and why). For any other project it offers to turn the single script into a script project.
+Every project -- a single file or a script project -- gets, top to bottom:
 
-The panel does no linking of its own: :class:`~in_reach_ide.main_window.MainWindow` links once per change and hands the
-result to :meth:`ScriptsPanel.show_link`, the same one the Problems tab reads.
+* **Envs** -- the ``script/env/<name>.env`` files the script can be built for, each with its flags and constants, the
+  active one marked; use one (or none), edit its file, add one, delete one;
+* its **state** -- whether the script checks cleanly -- and View Decompiled (the built ``.bin``'s script as RVT shows
+  it; a new project is built once when it is created, so there always is one);
+* the **budget** -- every storage pool and resource table the script's annotations use, and the trigger/condition/
+  action counters the last build measured, each against its cap.
+
+A single file (``script/output.txt``) adds a "Convert to Project" button (experimental: the window asks first, and offers
+a backup). A script project (``script/project.toml``) adds its modules (each with a checkbox), its blocks in build order
+(drag to reorder; each fragment under its block, with "Move to"), Link and New Module, and what fusion did.
+
+The panel does no checking of its own: :class:`~in_reach_ide.main_window.MainWindow` checks once per change and hands
+the result to :meth:`ScriptsPanel.show_single` or :meth:`ScriptsPanel.show_link`, the same one the Problems tab reads.
 """
 
 from __future__ import annotations
@@ -14,10 +22,9 @@ from __future__ import annotations
 from pathlib import Path
 
 from PyQt6.QtCore import Qt, pyqtSignal
-from PyQt6.QtGui import QBrush, QColor, QPalette
+from PyQt6.QtGui import QBrush, QColor, QFont
 from PyQt6.QtWidgets import (
     QAbstractItemView,
-    QComboBox,
     QFrame,
     QHBoxLayout,
     QLabel,
@@ -32,17 +39,21 @@ from PyQt6.QtWidgets import (
 
 #: How full a pool has to be before its row is flagged.
 NEAR_FULL = 0.9
-_NO_PROFILE = "No profile"
+NO_ENV = "(no env)"
 _WARN = QColor("#d19a2e")
 _ERROR = QColor("#d9534f")
 _PATH_ROLE = Qt.ItemDataRole.UserRole
 _NAME_ROLE = Qt.ItemDataRole.UserRole + 1
 _FRAGMENT_ROLE = Qt.ItemDataRole.UserRole + 2
+_ENV_ROLE = Qt.ItemDataRole.UserRole + 3
 
-_NOT_LINKED_TEXT = (
-    "This project's script is a single file, script/output.txt.\n\n"
-    "A script project splits it into blocks and modules: each module declares its own storage and adds code to the "
-    "blocks, and the linker allocates the slots, checks the result against the engine's limits and builds the script."
+_SINGLE_TEXT = (
+    "This project's script is one file, script/output.txt. Annotation comments work in it: @number NAME gets a "
+    "slot, @trait NAME { ... } a trait set, and @doc and @tags document it (see the Documentation view)."
+)
+_CONVERT_TIP = (
+    "Experimental. Splits the script into a script project: script/output.txt becomes script/blocks/main.mgl, and "
+    "modules can add to it. You'll be asked first, and offered a backup."
 )
 
 
@@ -72,12 +83,29 @@ def budget_rows(link_map: dict) -> list[tuple[str, int, int | None]]:
     return rows
 
 
+def status_text(result) -> str:
+    """One line on how the script checks: ``result`` is a :class:`~in_reach.app.script_project.LinkResult`."""
+    errors = len(result.errors)
+    warnings = len(result.diagnostics) - errors
+    if errors:
+        return f"{errors} error{'s' if errors != 1 else ''} -- see the Problems tab."
+    if warnings:
+        return f"Checks, with {warnings} warning{'s' if warnings != 1 else ''} -- see the Problems tab."
+    return "Checks cleanly."
+
+
 class ScriptsPanel(QWidget):
-    #: The profile the user picked (``None`` for "No profile").
-    profile_selected = pyqtSignal(object)
+    #: The env the user chose to build with (``None`` for no env).
+    env_selected = pyqtSignal(object)
+    #: Open this env's file to edit it.
+    env_edit_requested = pyqtSignal(str)
+    env_new_requested = pyqtSignal()
+    env_delete_requested = pyqtSignal(str)
     check_requested = pyqtSignal()
     link_requested = pyqtSignal()
-    create_project_requested = pyqtSignal()
+    convert_requested = pyqtSignal()
+    #: "View Decompiled": the built .bin's script as ReachVariantTool shows it.
+    view_decompiled_requested = pyqtSignal()
     new_module_requested = pyqtSignal()
     #: A module or block row was activated: open this file.
     open_file_requested = pyqtSignal(Path)
@@ -96,45 +124,77 @@ class ScriptsPanel(QWidget):
         scroll = QScrollArea()
         scroll.setWidgetResizable(True)
         scroll.setFrameShape(QFrame.Shape.NoFrame)
-        # A scroll area fills its viewport with the Window role (the IDE's chrome colour) unless told otherwise --
-        # the Dashboard's own scroll area sets Base on both it and its viewport for the same reason (see welcome.py).
-        for widget in (scroll, scroll.viewport()):
-            widget.setBackgroundRole(QPalette.ColorRole.Base)
-            widget.setAutoFillBackground(True)
+        # Transparent, so the sidebar card's own palette(base) fill -- and its 1px rounded border, which a filled scroll
+        # area flush against the card's edge would paint over -- show through.
+        # (Never a stylesheet for this: an unscoped `background: transparent` cascades into every child -- the trees'
+        # headers and the buttons lose their own backgrounds and paint black.)
         outer.addWidget(scroll)
         body = QWidget()
-        scroll.setWidget(body)
+        scroll.setWidget(body)  # (which switches the body's auto-fill on -- hence setting it off after)
+        for widget in (scroll, scroll.viewport(), body):
+            widget.setAutoFillBackground(False)
         layout = QVBoxLayout(body)
         layout.setContentsMargins(8, 8, 8, 8)
 
-        # -- a project that isn't a script project yet --
-        self.unlinked_box = QWidget()
-        unlinked = QVBoxLayout(self.unlinked_box)
-        unlinked.setContentsMargins(0, 0, 0, 0)
-        self.unlinked_label = QLabel(_NOT_LINKED_TEXT)
-        self.unlinked_label.setWordWrap(True)
-        unlinked.addWidget(self.unlinked_label)
-        self.create_button = QPushButton("Create Script Project")
-        self.create_button.setToolTip("Adds script/project.toml and moves the script into script/blocks/main.mgl")
-        self.create_button.clicked.connect(self.create_project_requested)
-        unlinked.addWidget(self.create_button)
-        layout.addWidget(self.unlinked_box)
+        # -- envs (either kind of project) --
+        self.envs_box = QWidget()
+        envs = QVBoxLayout(self.envs_box)
+        envs.setContentsMargins(0, 0, 0, 0)
+        envs.addWidget(_section("Envs"))
+        self.envs_tree = _tree(["Env", "Flags", "Constants"], 60)
+        self.envs_tree.setToolTip("script/env/<name>.env: FLAGS switch -- @if blocks on, NAME=value fills ${NAME}. "
+                                  "Double-click to edit.")
+        self.envs_tree.itemActivated.connect(self._on_env_activated)
+        self.envs_tree.itemSelectionChanged.connect(self._update_env_buttons)
+        envs.addWidget(self.envs_tree)
+        env_buttons = QHBoxLayout()
+        self.env_use_button = QPushButton("Use")
+        self.env_use_button.setToolTip("Build with the selected env")
+        self.env_use_button.clicked.connect(self._on_env_use)
+        self.env_edit_button = QPushButton("Edit")
+        self.env_edit_button.clicked.connect(self._on_env_edit)
+        self.env_new_button = QPushButton("New...")
+        self.env_new_button.clicked.connect(self.env_new_requested)
+        self.env_delete_button = QPushButton("Delete")
+        self.env_delete_button.clicked.connect(self._on_env_delete)
+        for button in (self.env_use_button, self.env_edit_button, self.env_new_button, self.env_delete_button):
+            env_buttons.addWidget(button)
+        envs.addLayout(env_buttons)
+        layout.addWidget(self.envs_box)
+
+        # -- state (either kind) --
+        layout.addWidget(_section("Script"))
+        self.status_label = QLabel()
+        self.status_label.setWordWrap(True)
+        layout.addWidget(self.status_label)
+        self.decompiled_button = QPushButton("View Decompiled")
+        self.decompiled_button.setToolTip("Open the built .bin's script as ReachVariantTool shows it (read-only)")
+        self.decompiled_button.clicked.connect(self.view_decompiled_requested)
+        layout.addWidget(self.decompiled_button)
+
+        # -- a single file --
+        self.single_box = QWidget()
+        single = QVBoxLayout(self.single_box)
+        single.setContentsMargins(0, 0, 0, 0)
+        self.single_label = QLabel(_SINGLE_TEXT)
+        self.single_label.setWordWrap(True)
+        single.addWidget(self.single_label)
+        single_buttons = QHBoxLayout()
+        self.single_check_button = QPushButton("Check")
+        self.single_check_button.setToolTip("Check the script for problems without building anything")
+        self.single_check_button.clicked.connect(self.check_requested)
+        self.convert_button = QPushButton("Convert to Project (experimental)")
+        self.convert_button.setToolTip(_CONVERT_TIP)
+        self.convert_button.clicked.connect(self.convert_requested)
+        single_buttons.addWidget(self.single_check_button)
+        single_buttons.addWidget(self.convert_button)
+        single.addLayout(single_buttons)
+        layout.addWidget(self.single_box)
 
         # -- a script project --
         self.linked_box = QWidget()
         linked = QVBoxLayout(self.linked_box)
         linked.setContentsMargins(0, 0, 0, 0)
-        self.status_label = QLabel()
-        self.status_label.setWordWrap(True)
-        linked.addWidget(self.status_label)
-
-        profile_row = QHBoxLayout()
-        profile_row.addWidget(QLabel("Profile"))
-        self.profile_combo = QComboBox()
-        self.profile_combo.activated.connect(self._on_profile_activated)
-        profile_row.addWidget(self.profile_combo, 1)
-        linked.addLayout(profile_row)
-
         buttons = QHBoxLayout()
         self.check_button = QPushButton("Check")
         self.check_button.setToolTip("Check the project for problems without building anything")
@@ -166,60 +226,133 @@ class ScriptsPanel(QWidget):
         self.blocks_tree.setContextMenuPolicy(Qt.ContextMenuPolicy.CustomContextMenu)
         self.blocks_tree.customContextMenuRequested.connect(self._on_blocks_menu)
         linked.addWidget(self.blocks_tree)
-
-        linked.addWidget(_section("Budget"))
-        self.budget_tree = _tree(["", "Used", "Cap"], 60)
-        linked.addWidget(self.budget_tree)
-
-        linked.addWidget(_section("Fusion"))
-        self.fusion_tree = _tree(["Result"], 40)
-        linked.addWidget(self.fusion_tree)
         layout.addWidget(self.linked_box)
+
+        # -- budget (either kind), fusion (a project) --
+        self.budget_box = QWidget()
+        budget = QVBoxLayout(self.budget_box)
+        budget.setContentsMargins(0, 0, 0, 0)
+        budget.addWidget(_section("Budget"))
+        self.budget_tree = _tree(["", "Used", "Cap"], 60)
+        budget.addWidget(self.budget_tree)
+        layout.addWidget(self.budget_box)
+
+        self.fusion_box = QWidget()
+        fusion = QVBoxLayout(self.fusion_box)
+        fusion.setContentsMargins(0, 0, 0, 0)
+        fusion.addWidget(_section("Fusion"))
+        self.fusion_tree = _tree(["Result"], 40)
+        fusion.addWidget(self.fusion_tree)
+        layout.addWidget(self.fusion_box)
         layout.addStretch(1)
         self.show_not_a_project()
 
     # -- states ------------------------------------------------------------------------------------------
 
+    def _show(self, *, single: bool, linked: bool) -> None:
+        any_project = single or linked
+        for widget in (self.envs_box, self.status_label, self.decompiled_button, self.budget_box):
+            widget.setVisible(any_project)
+        self.single_box.setVisible(single)
+        self.linked_box.setVisible(linked)
+        self.fusion_box.setVisible(linked)
+
     def show_not_a_project(self) -> None:
         """No project is open."""
         self._folder = None
-        self.unlinked_box.hide()
-        self.linked_box.hide()
+        self._show(single=False, linked=False)
 
-    def show_unlinked(self, folder: Path) -> None:
-        """``folder`` is a single-file project."""
+    def show_single(self, folder: Path, result, envs) -> None:
+        """``folder``'s script is one file; ``result`` is its :class:`~in_reach.app.script_project.LinkResult` and
+        ``envs`` its :class:`in_reach.api.EnvInfo`."""
         self._folder = folder
-        self.unlinked_box.show()
-        self.linked_box.hide()
+        self._show(single=True, linked=False)
+        self.status_label.setText(status_text(result))
+        self._fill_envs(envs)
+        self._fill_budget(result)
 
-    def show_link(self, folder: Path, result, profiles: list[str], active: str | None) -> None:
+    def show_link(self, folder: Path, result, envs) -> None:
         """``folder`` is a script project; ``result`` is its :class:`~in_reach.app.script_project.LinkResult`."""
         self._folder = folder
-        self.unlinked_box.hide()
-        self.linked_box.show()
-
-        errors = len(result.errors)
-        warnings = len(result.diagnostics) - errors
-        if errors:
-            self.status_label.setText(f"{errors} error{'s' if errors != 1 else ''} -- see the Problems tab.")
-        elif warnings:
-            self.status_label.setText(f"Links, with {warnings} warning{'s' if warnings != 1 else ''}.")
-        else:
-            self.status_label.setText("Links cleanly.")
-
-        self.profile_combo.blockSignals(True)
-        self.profile_combo.clear()
-        self.profile_combo.addItems([*profiles, _NO_PROFILE])
-        self.profile_combo.setCurrentText(active if active in profiles else _NO_PROFILE)
-        self.profile_combo.setEnabled(bool(profiles))
-        self.profile_combo.blockSignals(False)
-
+        self._show(single=False, linked=True)
+        self.status_label.setText(status_text(result))
+        self._fill_envs(envs)
         self._fill_modules(result.project)
         self._fill_blocks(result.project, getattr(result, "model", None))
         self._fill_budget(result)
         self._fill_fusion(result)
 
     # -- content -----------------------------------------------------------------------------------------
+
+    def _fill_envs(self, envs) -> None:
+        self.envs_tree.clear()
+        bold = QFont()
+        bold.setBold(True)
+        for details in envs.details:
+            active = details.name == envs.active
+            if details.error:
+                item = QTreeWidgetItem([details.name, "invalid", details.error])
+                for column in range(3):
+                    item.setForeground(column, QBrush(_ERROR))
+            else:
+                constants = ", ".join(f"{k}={v}" for k, v in details.constants.items())
+                item = QTreeWidgetItem([details.name, ",".join(details.flags) or "-", constants or "-"])
+            item.setData(0, _ENV_ROLE, details.name)
+            if active:
+                item.setText(0, f"{details.name}  (active)")
+                for column in range(3):
+                    item.setFont(column, bold)
+            self.envs_tree.addTopLevelItem(item)
+        none = QTreeWidgetItem([NO_ENV + ("  (active)" if envs.active is None else ""), "", ""])
+        none.setData(0, _ENV_ROLE, None)
+        if envs.active is None:
+            none.setFont(0, bold)
+        self.envs_tree.addTopLevelItem(none)
+        self._update_env_buttons()
+
+    def env_names(self) -> list[str | None]:
+        """Each row's env, in order (``None`` for the "no env" row)."""
+        return [self.envs_tree.topLevelItem(i).data(0, _ENV_ROLE) for i in range(self.envs_tree.topLevelItemCount())]
+
+    def select_env(self, name: str | None) -> None:
+        """Selects ``name``'s row (``None``: the "no env" row)."""
+        for index, env in enumerate(self.env_names()):
+            if env == name:
+                self.envs_tree.setCurrentItem(self.envs_tree.topLevelItem(index))
+                return
+
+    def _selected_env(self) -> tuple[bool, str | None]:
+        """``(a row is selected, its env)``."""
+        item = self.envs_tree.currentItem()
+        return (item is not None, item.data(0, _ENV_ROLE) if item is not None else None)
+
+    def _update_env_buttons(self) -> None:
+        selected, name = self._selected_env()
+        self.env_use_button.setEnabled(selected)
+        self.env_edit_button.setEnabled(name is not None)
+        self.env_delete_button.setEnabled(name is not None)
+
+    def _on_env_use(self) -> None:
+        selected, name = self._selected_env()
+        if selected:
+            self.env_selected.emit(name)
+
+    def _on_env_edit(self) -> None:
+        _selected, name = self._selected_env()
+        if name is not None:
+            self.env_edit_requested.emit(name)
+
+    def _on_env_delete(self) -> None:
+        _selected, name = self._selected_env()
+        if name is not None:
+            self.env_delete_requested.emit(name)
+
+    def _on_env_activated(self, item: QTreeWidgetItem, _column: int) -> None:
+        name = item.data(0, _ENV_ROLE)
+        if name is None:
+            self.env_selected.emit(None)
+        else:
+            self.env_edit_requested.emit(name)
 
     def _fill_modules(self, project) -> None:
         self.modules_tree.blockSignals(True)  # filling isn't the user ticking anything
@@ -289,6 +422,8 @@ class ScriptsPanel(QWidget):
             self.budget_tree.addTopLevelItem(item)
         if not result.link_map:
             self.budget_tree.addTopLevelItem(QTreeWidgetItem(["nothing linked yet", "", ""]))
+        elif self.budget_tree.topLevelItemCount() == 0:
+            self.budget_tree.addTopLevelItem(QTreeWidgetItem(["nothing declared yet", "", ""]))
 
     def _fill_fusion(self, result) -> None:
         self.fusion_tree.clear()
@@ -340,10 +475,6 @@ class ScriptsPanel(QWidget):
         menu = self.fragment_menu(self.blocks_tree.itemAt(position))
         if menu is not None:
             menu.exec(self.blocks_tree.viewport().mapToGlobal(position))
-
-    def _on_profile_activated(self, index: int) -> None:
-        text = self.profile_combo.itemText(index)
-        self.profile_selected.emit(None if text == _NO_PROFILE else text)
 
     def _on_row_activated(self, item: QTreeWidgetItem, _column: int) -> None:
         path = item.data(0, _PATH_ROLE)

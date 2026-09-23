@@ -5,7 +5,7 @@
 `in-reach-ide` is the desktop IDE for Halo: Reach Megalo game variants. It is a PyQt6 application built on the
 [`in-reach`](../in-reach) library and CLI (a separate repo and PyPI package, `in-reach`), which owns everything that isn't
 a widget: the project model, linker, compiler, native `_reachvarianttool` module, shadow VCS, launchers and the command
-line. This package depends on it (`in-reach>=0.3.0,<0.5`) and calls `in_reach.api` plus the framework-agnostic
+line. This package depends on it (`in-reach>=0.4.0,<0.5`, API_VERSION 2) and calls `in_reach.api` plus the framework-agnostic
 `in_reach.app.*` modules; it never reimplements them.
 
 The layering is one-way: **`in_reach` never imports `in_reach_ide`** (its CLI reaches it by name, through
@@ -52,7 +52,7 @@ IDE's "Verify System Settings" -- Tesseract on `PATH`, the Steam / Halo: MCC / g
   anything -- primary-sidebar
   panels, each under one shared bold title strip naming whichever view is showing
   (`MainWindow.sidebar_header`), (Dashboard/Welcome `welcome.py`, Explorer `explorer.py` -- also
-  owns the Quick Launch section (the Export File/Launch RVT/View Compiled button row, plus
+  owns the Quick Launch section (Export File and Launch RVT on one row, View Compiled Megalo across the next, plus
   Built-in/Hot Reload buttons that open a `system_verify`-resolved install folder in the OS file
   explorer, including an "Open In-Reach Maps" one that opens `.in-reach/maps`, created on demand)
   and, pinned to the bottom of the Dashboard, a "Notepad" box (`notepad.py`): a line-numbered,
@@ -80,13 +80,17 @@ IDE's "Verify System Settings" -- Tesseract on `PATH`, the Steam / Halo: MCC / g
   own `open_diff()`) showing that file's `HEAD` version against its current on-disk content, each
   side with its own shrunk-text preview along its right edge (added/removed lines highlighted)
   mirroring the ordinary editor's own minimap,
-  Scripts `scripts_panel.py` (the active project's script project: build-profile picker, modules,
-  blocks, the engine budget with near-full rows flagged, and what fusion merged or declined -- or, for
-  a single-file project, an offer to "Create Script Project"; it does no linking itself, `MainWindow.
-  _refresh_script_views()` links once per change and feeds it and the Problems tab), Documentation
-  `documentation_panel.py`, Testing `testing_panel.py`, Playtest `playtest_panel.py` (a sprinting-man
+  Scripts `scripts_panel.py` (the active project's script, either kind: an Envs section -- each
+  `script/env/<name>.env` with its flags and constants, the active one marked, Use/Edit/New/Delete -- its check
+  state and budget; a single file adds Check and "Convert to Project (experimental)", which asks first and offers
+  "Back Up && Convert" (`api.backup_script()`); a script project adds modules, blocks (drag to reorder, "Move to"
+  on a fragment), Link/New Module and fusion. It does no checking itself: `MainWindow._refresh_script_views()`
+  checks once per change and feeds it, the Problems tab, the Documentation view and the editor's hover text),
+  Documentation `documentation_panel.py` (the script's generated documentation, `in_reach.app.script_project.docs`:
+  the rendered overview with a tag filter, every `@doc` note as a row that opens its line, Refresh, "Open
+  overview.md" (writes `build/docs/`) and "Add README"), Testing `testing_panel.py`, Playtest `playtest_panel.py` (a sprinting-man
   activity-bar icon directly under Testing, with its own View menu/palette entry), LLM `llm_panel.py` --
-  Documentation/Testing/Playtest/LLM are all still placeholder-only stubs -- Map Files `maps_panel.py`, which lists clickable,
+  Testing/Playtest/LLM are all still placeholder-only stubs -- Map Files `maps_panel.py`, which lists clickable,
   link-styled folder "slugs" for the Map Variants/Hopper Variants/User Maps folders that Verify
   System Settings resolved (each opens that folder in the OS file explorer) plus an "Open In-Reach
   Maps" button, Kanban `kanban_panel.py` -- the active project's boards (create/open/rename/delete,
@@ -100,9 +104,13 @@ IDE's "Verify System Settings" -- Tesseract on `PATH`, the Steam / Halo: MCC / g
   Regular Expression toggles inside the query box, a chevron that reveals a replace row (Preserve
   Case, Replace All), and a "..." toggle that reveals "files to include" (with a "Search only in
   Open Editors" toggle) and "files to exclude" glob boxes),
-  a "Select Build Profile" palette submenu (one entry per `script/env` profile of the open project,
-  the active one marked, plus "No profile") mirrored by a left-edge status-bar "Profile: <name>"
-  segment that opens the same pick (hidden with no project or no profiles), a bottom panel (`bottom_panel.py`)
+  a "Select Env" palette submenu (one entry per `script/env` env of the open project, the active one
+  marked, plus "No env") and "New Env", mirrored by a left-edge status-bar "Env: <name>" segment that
+  opens the same pick (hidden with no project or no envs), checking the script as you type (any editor
+  on a file under the project's `script/` -- `output.txt`, `.mgl`, a manifest or an env file -- is checked
+  unsaved with `api.check_text` 400 ms after typing stops, via `MainPanelArea(on_text_edited=...)`), hover
+  text in Megalo editors for a declared name (its slot or table entry and its `@doc`,
+  `editor.set_megalo_hover_provider()`), a bottom panel (`bottom_panel.py`)
   whose first tab is a live, read-only view (`logs_panel.py`) of every record the app's own logger
   emits, a Settings popout (`settings_dialog.py`) with a live theme picker (`theme.py`/
   `theme_picker.py`), and a VSCode-style command palette (`quick_access.py`).
@@ -118,7 +126,8 @@ IDE's "Verify System Settings" -- Tesseract on `PATH`, the Steam / Halo: MCC / g
   order, and a fragment's right-click "Move to" puts it in another block. Every one is a text edit through
   `in_reach.api` (`set_module_enabled`/`set_block_order`/`move_fragment` -> `project.toml` / a `-- @fragment` line), then a
   re-check; a refused edit is reported and the views snap back. The palette has "Enable/Disable Script Module".
-- "View Decompiled" (Dashboard button + palette) opens `build/Decompiled.txt` -- the built `.bin`'s script as RVT shows it --
-  via `api.show(folder, "rvt")`; "View Compiled" is the `rvt+` view.
+- "View Decompiled" (the Scripts view's button + palette) opens `build/Decompiled.txt` -- the built `.bin`'s script as RVT
+  shows it -- via `api.show(folder, "rvt")`; "View Compiled Megalo" (Dashboard) is the `rvt+` view. A project created from
+  the Welcome tab is built once straight away (`WelcomeTab._initial_build` -> `api.initial_build`), so it always has one.
 - `tests/` -- `pytest-qt` widget tests (`test_ide_smoke.py` is the largest and covers most of `main_window.py`/
   `activity_bar.py`/`tabs.py` end-to-end) plus tests of the moved helpers.

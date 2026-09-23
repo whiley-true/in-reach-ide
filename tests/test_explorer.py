@@ -758,9 +758,20 @@ def test_export_and_view_output_buttons_each_have_their_own_background_and_no_sh
     assert panel.export_button.styleSheet() == panel.view_output_button.styleSheet()
 
 
-def test_view_output_button_is_labeled_view_compiled(panel: ExplorerPanel) -> None:
-    # PROMPT.md: "View Compiled (renamed from View Compiled.txt)".
-    assert panel.view_output_button.text() == "View Compiled"
+def test_view_output_button_is_labeled_view_compiled_megalo(panel: ExplorerPanel) -> None:
+    assert panel.view_output_button.text() == "View Compiled Megalo"
+
+
+def test_the_quick_launch_buttons_take_two_rows_so_none_is_squeezed(panel: ExplorerPanel) -> None:
+    layout = panel.button_row.layout()
+
+    def cell(button):
+        row, column, _rows, columns = layout.getItemPosition(layout.indexOf(button))
+        return row, column, columns
+
+    assert cell(panel.export_button) == (0, 0, 1) and cell(panel.rvt_button) == (0, 1, 1)
+    assert cell(panel.view_output_button) == (1, 0, 2)  # the whole second row
+    assert not hasattr(panel, "view_decompiled_button")  # that one is the Scripts view's now
 
 
 # -- Launch RVT button (PROMPT.md: "we are removing locations, and rvt ... please add a button in

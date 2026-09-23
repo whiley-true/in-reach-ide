@@ -145,7 +145,7 @@ def test_build_profile_directives_are_asked_about(
 
     _watch(window, folder)
 
-    assert asked == [[script_sync.PullReason.PROFILE_DIRECTIVES.value]]
+    assert asked == [[script_sync.PullReason.ENV_DIRECTIVES.value]]
     assert _output_txt(folder) == "-- @if DEV\nx = 1\n-- @end\n"
 
 
@@ -182,7 +182,7 @@ def test_every_reason_is_listed_in_one_question(
         [
             script_sync.PullReason.UNAPPLIED_EDITS.value,
             script_sync.PullReason.COMMENTS.value,
-            script_sync.PullReason.PROFILE_DIRECTIVES.value,
+            script_sync.PullReason.ENV_DIRECTIVES.value,
             script_sync.PullReason.UNSAVED_EDITS.value,
         ]
     ]

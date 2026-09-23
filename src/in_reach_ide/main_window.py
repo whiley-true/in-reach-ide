@@ -46,7 +46,7 @@ from in_reach_ide import zoom as zoom_module
 from in_reach_ide.activity_bar import DEFAULT_VIEW, ActivityBar
 from in_reach_ide.bottom_panel import BottomPanel
 from in_reach_ide.documentation_panel import DocumentationPanel
-from in_reach_ide.editor import TextEditorWidget, shows_cursor_info
+from in_reach_ide.editor import TextEditorWidget, is_megalo_path, set_megalo_hover_provider, shows_cursor_info
 from in_reach_ide.explorer import ExplorerPanel
 from in_reach_ide.git_panel import GitPanel
 from in_reach_ide.kanban_panel import KanbanPanel
@@ -721,8 +721,14 @@ class MainWindow(QWidget):
             on_file_saved=self._on_file_saved,
             project_title=self._active_project_title,
             on_cursor_info=self._show_cursor_info,
+            on_text_edited=self._on_text_edited,
         )
         self._main_splitter.addWidget(self.main_panel)
+        self._typed_editor = None
+        self._check_timer = QTimer(self)
+        self._check_timer.setSingleShot(True)
+        self._check_timer.setInterval(self.CHECK_AS_YOU_TYPE_MS)
+        self._check_timer.timeout.connect(self._check_typed_script)
 
         # PROMPT.md: "[generated files] should update when rvt saves" -- watches the active
         # project's own freshly-compiled .bin, the same file launch_rvt() opens RVT against (see
@@ -775,7 +781,6 @@ class MainWindow(QWidget):
         self.explorer_panel.file_activated.connect(self._on_explorer_file_activated)
         self.explorer_panel.export_requested.connect(self.export_rvt_file)
         self.explorer_panel.view_output_requested.connect(self.view_output_txt)
-        self.explorer_panel.view_decompiled_requested.connect(self.view_decompiled)
         self.explorer_panel.launch_rvt_requested.connect(self.launch_rvt)
         self.explorer_panel.open_builtin_folder_requested.connect(self._open_builtin_folder)
         self.explorer_panel.notepad_open_in_editor_requested.connect(self.open_notepad_in_editor)
@@ -791,10 +796,18 @@ class MainWindow(QWidget):
         self._bottom_panel_card = style.wrap_tab_widget(self.bottom_panel)
         self._main_splitter.addWidget(self._bottom_panel_card)
         self.bottom_panel.problems_panel.open_requested.connect(self._on_problem_activated)
-        self.scripts_panel.profile_selected.connect(self._set_build_profile)
+        self.scripts_panel.env_selected.connect(self._set_env)
+        self.scripts_panel.env_edit_requested.connect(self.edit_env)
+        self.scripts_panel.env_new_requested.connect(self.new_env)
+        self.scripts_panel.env_delete_requested.connect(self.delete_env)
         self.scripts_panel.check_requested.connect(self.check_script_project)
         self.scripts_panel.link_requested.connect(self.link_script_project)
-        self.scripts_panel.create_project_requested.connect(self.create_script_project)
+        self.scripts_panel.convert_requested.connect(self.convert_to_project)
+        self.scripts_panel.view_decompiled_requested.connect(self.view_decompiled)
+        self.documentation_panel.open_location_requested.connect(self._on_problem_activated)
+        self.documentation_panel.refresh_requested.connect(self.refresh_documentation)
+        self.documentation_panel.open_overview_requested.connect(self.open_docs_overview)
+        self.documentation_panel.create_readme_requested.connect(self.create_script_readme)
         self.scripts_panel.new_module_requested.connect(self.new_script_module)
         self.scripts_panel.open_file_requested.connect(self._on_explorer_file_activated)
         self.scripts_panel.module_toggled.connect(self.set_script_module_enabled)
@@ -818,8 +831,8 @@ class MainWindow(QWidget):
         # Also needs self.status_bar to already exist -- same reasoning as the status label above.
         self.explorer_panel.active_project_changed.connect(self._refresh_vcs_status)
         self._refresh_vcs_status(self.explorer_panel.current_folder)
-        self.explorer_panel.active_project_changed.connect(self._refresh_profile_indicator)
-        self._refresh_profile_indicator(self.explorer_panel.current_folder)
+        self.explorer_panel.active_project_changed.connect(self._refresh_env_indicator)
+        self._refresh_env_indicator(self.explorer_panel.current_folder)
 
         # PROMPT.md (Quick Access Bar work): bottom-right Ln/Col/Spaces segments -- connects to the
         # panel's own re-broadcast signal (MainPanelArea.cursor_info_changed), not one specific
@@ -1164,9 +1177,10 @@ class MainWindow(QWidget):
             Command(label="LLM", action=lambda: self.activity_bar.llm_button.click()),
             Command(label="View Logs", action=self.view_logs, detail=_SHORTCUT_VIEW_LOGS),
             Command(label="View Problems", action=self.view_problems),
-            Command(label="Check Script Project", action=self.check_script_project),
+            Command(label="Check Script", action=self.check_script_project),
             Command(label="Link Script Project", action=self.link_script_project),
-            Command(label="Create Script Project", action=self.create_script_project),
+            Command(label="Convert to Project (experimental)", action=self.convert_to_project),
+            Command(label="Open Documentation Overview", action=self.open_docs_overview),
             Command(label="New Script Module", action=self.new_script_module),
             Command(label="Enable Script Module", children=self._script_module_toggle_commands(True)),
             Command(label="Disable Script Module", children=self._script_module_toggle_commands(False)),
@@ -1180,7 +1194,8 @@ class MainWindow(QWidget):
                     for board in self._kanban_boards()
                 ],
             ),
-            Command(label="Select Build Profile", children=self._build_profile_commands()),
+            Command(label="Select Env", children=self._env_commands()),
+            Command(label="New Env", action=self.new_env),
             Command(label="Open Notepad in Editor", action=self.open_notepad_in_editor),
             Command(label="Open Notepad in Window", action=self.open_notepad_in_window),
             Command(
@@ -1427,7 +1442,18 @@ class MainWindow(QWidget):
         editor = self._active_text_editor()
         if editor is None:
             return
-        _style, width = indent_state.get_indent()
+        if is_megalo_path(editor.path):
+            # Megalo script text's own indent step is a fixed 3 spaces -- the decompiler's own
+            # convention, not a per-project style choice like it is for JSON (see unparse.py's own
+            # INDENT) -- so it converts by that, never by whatever the app's general tab-width
+            # preference happens to be set to. Converting by the general width instead left a
+            # genuinely one-level-deep line's 3 spaces short of a full group under a width of 4 (its
+            # default), so "Convert indentation to tabs" silently did nothing to it.
+            from in_reach.app.rvt.megalo_ast.unparse import INDENT
+
+            width = len(INDENT)
+        else:
+            _style, width = indent_state.get_indent()
         converter = indent_settings.convert_to_spaces if to_spaces else indent_settings.convert_to_tabs
         self._rewrite_active_lines(editor, lambda text: converter(text, width))
 
@@ -2032,8 +2058,8 @@ class MainWindow(QWidget):
         self._refresh_apply_enabled(folder)
         if folder is not None:
             self._refresh_vcs_status(folder)
-            # A saved profile file (or the active-profile pointer) can change what the indicator says.
-            self._refresh_profile_indicator(folder)
+            # A saved env file (or the active-env pointer) can change what the indicator says.
+            self._refresh_env_indicator(folder)
             self._refresh_script_views(folder)
 
     def _on_notepad_saved(self, path: Path) -> None:
@@ -2176,11 +2202,11 @@ class MainWindow(QWidget):
             return
         from in_reach.app import script_preprocess, vcs
 
-        # A release is normally stamped from the release profile. Nothing is switched for the user (the choice is a
-        # project file the stamp records), but a project that has a release profile and isn't on it gets asked.
-        active = script_preprocess.active_profile_name(folder)
-        if "release" in script_preprocess.list_profiles(folder) and active != "release":
-            if not self._confirm_stamp_off_release_profile(active):
+        # A release is normally stamped from the release env. Nothing is switched for the user (the choice is a
+        # project file the stamp records), but a project that has a release env and isn't on it gets asked.
+        active = script_preprocess.active_env_name(folder)
+        if "release" in script_preprocess.list_envs(folder) and active != "release":
+            if not self._confirm_stamp_off_release_env(active):
                 return
         try:
             vcs.stamp(folder, message, version=version)
@@ -2190,20 +2216,20 @@ class MainWindow(QWidget):
         _logger.info("stamped release %r (v%s) for %s", message, version, folder)
         self._refresh_vcs_status(folder)
 
-    def _confirm_stamp_off_release_profile(self, active: str | None) -> bool:
-        """Asks whether to stamp a release while the build profile isn't ``release``. Kept as its own method purely as
-        a test seam, same convention as :meth:`_confirm_commit_uncompiled`. ``active`` is the profile in use (``None``:
-        none chosen)."""
+    def _confirm_stamp_off_release_env(self, active: str | None) -> bool:
+        """Asks whether to stamp a release while the env isn't ``release``. Kept as its own method purely as a test
+        seam, same convention as :meth:`_confirm_commit_uncompiled`. ``active`` is the env in use (``None``: none
+        chosen)."""
         box = QMessageBox(self)
         box.setIcon(QMessageBox.Icon.Warning)
         box.setWindowTitle("in-reach")
         box.setText(
-            f"The active build profile is {active!r}, not 'release'." if active else "No build profile is active, not 'release'."
+            f"The active env is {active!r}, not 'release'." if active else "No env is active, not 'release'."
         )
         box.setInformativeText(
-            "This project has a 'release' profile. The stamp records the project as it is now, including which profile "
-            "is active, so a stamp taken here won't be a release build. Switch profile first (Select Build Profile in "
-            "the command palette), or stamp anyway?"
+            "This project has a 'release' env. The stamp records the project as it is now, including which env "
+            "is active, so a stamp taken here won't be a release build. Switch env first (the Scripts view's Envs, or "
+            "Select Env in the command palette), or stamp anyway?"
         )
         stamp_button = box.addButton("Stamp Anyway", QMessageBox.ButtonRole.DestructiveRole)
         cancel_button = box.addButton("Cancel", QMessageBox.ButtonRole.RejectRole)
@@ -2743,7 +2769,7 @@ class MainWindow(QWidget):
 
     def view_decompiled(self) -> None:
         """"View Decompiled" (the Dashboard's button, and the command palette) -- opens a read-only view of the active
-        project's *built* script as ReachVariantTool shows it (``build/Decompiled.txt``: no modules, no profile), so what
+        project's *built* script as ReachVariantTool shows it (``build/Decompiled.txt``: no modules, no env), so what
         was built can be compared with what was written and with "View Compiled". Says so if nothing has been built
         yet. A no-op with no project open."""
         folder = self.explorer_panel.current_folder
@@ -2774,72 +2800,132 @@ class MainWindow(QWidget):
         path = write_output_view(folder)
         self.main_panel.active_pane.open_file(path, force_reload=True)
 
-    # -- build profiles (script/env/<name>.env) -----------------------------------------------------
+    # -- envs (script/env/<name>.env) ----------------------------------------------------------------
 
-    def _build_profile_commands(self) -> list[Command]:
-        """The "Select Build Profile" palette pick: one entry per ``script/env/*.env`` profile of the
-        active project, the current one marked, plus "No profile" -- empty with no project open or no
-        profiles to choose between. (See :mod:`in_reach.app.script_preprocess`: the active profile's
-        ``${CONSTANTS}`` and ``-- @if`` blocks are applied to the script before it's compiled and before
-        ``Compiled.txt`` is written.)"""
+    def _env_commands(self) -> list[Command]:
+        """The "Select Env" palette pick: one entry per ``script/env/*.env`` of the active project, the current one
+        marked, plus "No env" -- empty with no project open or no envs to choose between. (See
+        :mod:`in_reach.app.script_preprocess`: the active env's ``${CONSTANTS}`` and ``-- @if`` blocks are applied to the
+        script before it's compiled and before ``Compiled.txt`` is written.)"""
         folder = self.explorer_panel.current_folder
         if folder is None:
             return []
         from in_reach.app import script_preprocess
 
-        names = script_preprocess.list_profiles(folder)
+        names = script_preprocess.list_envs(folder)
         if not names:
             return []
-        active = script_preprocess.active_profile_name(folder)
+        active = script_preprocess.active_env_name(folder)
         commands = [
-            Command(label=name, detail="active" if name == active else "", action=lambda n=name: self._set_build_profile(n))
+            Command(label=name, detail="active" if name == active else "", action=lambda n=name: self._set_env(n))
             for name in names
         ]
-        commands.append(
-            Command(label="No profile", detail="active" if active not in names else "", action=lambda: self._set_build_profile(None))
-        )
+        commands.append(Command(label="No env", detail="active" if active not in names else "", action=lambda: self._set_env(None)))
         return commands
 
-    def _set_build_profile(self, name: str | None) -> None:
-        """Makes ``name`` (or, for ``None``, no profile) the one the active project builds with. A no-op
-        with no project open; a failure to write the choice is logged, not raised."""
+    def _set_env(self, name: str | None) -> None:
+        """Makes ``name`` (or, for ``None``, no env) the one the active project builds with. A no-op with no project
+        open; a failure to write the choice is logged, not raised."""
         folder = self.explorer_panel.current_folder
         if folder is None:
             return
         from in_reach.app import script_preprocess
 
         try:
-            script_preprocess.set_active_profile(folder, name)
+            script_preprocess.set_active_env(folder, name)
         except (ValueError, OSError):
-            _logger.exception("couldn't set the build profile for %s to %r", folder, name)
+            _logger.exception("couldn't set the env for %s to %r", folder, name)
             return
-        _logger.info("build profile for %s set to %s", folder, name or "none")
-        self._refresh_profile_indicator(folder)
-        self._refresh_script_views(folder)  # the profile's flags and constants change what a script project builds
+        _logger.info("env for %s set to %s", folder, name or "none")
+        self._refresh_env_indicator(folder)
+        self._refresh_script_views(folder)  # the env's flags and constants change what the script builds
+        self._refresh_apply_enabled(folder)
 
-    def _refresh_profile_indicator(self, folder: Path | None) -> None:
-        """The status bar's left-edge "Profile: <name>" segment for ``folder``: hidden with no project
-        open or none of ``script/env``'s profiles to choose between, else the active one (or "No
-        profile"). Clicking it opens the same pick as the palette's "Select Build Profile"."""
+    def _refresh_env_indicator(self, folder: Path | None) -> None:
+        """The status bar's left-edge "Env: <name>" segment for ``folder``: hidden with no project open or none of
+        ``script/env``'s envs to choose between, else the active one (or "No env"). Clicking it opens the same pick as
+        the palette's "Select Env"."""
         from in_reach.app import script_preprocess
 
-        if folder is None or not script_preprocess.list_profiles(folder):
-            self.status_bar.clear_profile()
+        if folder is None or not script_preprocess.list_envs(folder):
+            self.status_bar.clear_env()
             return
-        self.status_bar.set_profile(script_preprocess.active_profile_name(folder), on_click=self._pick_build_profile)
+        self.status_bar.set_env(script_preprocess.active_env_name(folder), on_click=self._pick_env)
 
-    def _pick_build_profile(self) -> None:
-        """Opens the "Select Build Profile" quick-pick (the status bar segment's own click)."""
-        commands = self._build_profile_commands()
+    def _pick_env(self) -> None:
+        """Opens the "Select Env" quick-pick (the status bar segment's own click)."""
+        commands = self._env_commands()
         if commands:
-            self.quick_access.open_action_list(commands, "Select Build Profile")
+            self.quick_access.open_action_list(commands, "Select Env")
 
-    # -- script projects (script/project.toml) ------------------------------------------------------
+    def new_env(self) -> None:
+        """"New Env" (and the Scripts view's New...) -- asks for a name, adds ``script/env/<name>.env`` -- a copy of the
+        active env if there is one, else empty -- and opens it. Doesn't make it active. A no-op with no project open."""
+        folder = self.explorer_panel.current_folder
+        if folder is None:
+            return
+        from in_reach import api
+        from in_reach.app import script_preprocess
+
+        name = self._ask_env_name()
+        if not name:
+            return
+        active = script_preprocess.active_env_name(folder)
+        copy_from = active if active in script_preprocess.list_envs(folder) else None
+        try:
+            api.new_env(folder, name, copy_from=copy_from)
+        except (api.ApiError, OSError) as exc:
+            QMessageBox.critical(self, "in-reach", f"Couldn't add the env:\n{exc}")
+            return
+        _logger.info("added env %s to %s", name, folder)
+        self._refresh_env_indicator(folder)
+        self._refresh_script_views(folder)
+        self.main_panel.active_pane.open_file(script_preprocess.env_path(folder, name))
+
+    def _ask_env_name(self) -> str:
+        """The new env's name, or ``""`` if cancelled. A test seam, like :meth:`_ask_module_name`."""
+        from PyQt6.QtWidgets import QInputDialog
+
+        name, accepted = QInputDialog.getText(self, "New Env", "Env name (a file script/env/<name>.env):")
+        return name.strip() if accepted else ""
+
+    def edit_env(self, name: str) -> None:
+        """Opens env ``name``'s file -- the Scripts view's Edit, or a double-click on an env."""
+        folder = self.explorer_panel.current_folder
+        if folder is None:
+            return
+        from in_reach.app import script_preprocess
+
+        self.main_panel.active_pane.open_file(script_preprocess.env_path(folder, name))
+
+    def delete_env(self, name: str) -> None:
+        """Removes env ``name`` after asking -- the Scripts view's Delete. Deleting the active env leaves none active."""
+        folder = self.explorer_panel.current_folder
+        if folder is None or not self._confirm_delete_env(name):
+            return
+        from in_reach import api
+
+        try:
+            api.delete_env(folder, name)
+        except (api.ApiError, OSError) as exc:
+            QMessageBox.critical(self, "in-reach", f"Couldn't delete the env:\n{exc}")
+            return
+        _logger.info("deleted env %s from %s", name, folder)
+        self._refresh_env_indicator(folder)
+        self._refresh_script_views(folder)
+        self._refresh_apply_enabled(folder)
+
+    def _confirm_delete_env(self, name: str) -> bool:
+        """A test seam, like :meth:`_confirm_convert_to_project`."""
+        answer = QMessageBox.question(self, "in-reach", f"Delete the env {name!r} (script/env/{name}.env)?")
+        return answer == QMessageBox.StandardButton.Yes
+
+    # -- the script: a single file or a script project ---------------------------------------------
 
     def _refresh_script_views(self, folder: Path | None) -> None:
-        """Re-checks ``folder``'s script project (if it is one -- see :mod:`in_reach.app.script_project`) and updates
-        what shows the result: the bottom panel's Problems tab and the Scripts view. Nothing is written. A project that
-        is a single script (or no project) empties the Problems tab and shows the Scripts view's own explanation."""
+        """Re-checks ``folder``'s script -- a script project, or its single ``script/output.txt`` (see
+        :mod:`in_reach.app.script_project`) -- and updates everything that shows the result: the bottom panel's Problems
+        tab, the Scripts view, the Documentation view and what hovering a name in an editor says. Nothing is written."""
         from in_reach import api
         from in_reach.app.script_project import is_linked
         from in_reach_ide.problems_panel import problems_from_diagnostics
@@ -2847,18 +2933,139 @@ class MainWindow(QWidget):
         bottom = getattr(self, "bottom_panel", None)  # a project can open while the window is still being built
         if bottom is None:
             return
-        if folder is None:
+        checked = None
+        if folder is not None:
+            try:
+                checked = api.check(folder)  # a broken script still carries what it last built
+            except (api.ApiError, OSError):
+                checked = None  # no script at all
+        if checked is None:
             bottom.problems_panel.clear()
             self.scripts_panel.show_not_a_project()
+            self.documentation_panel.show_nothing()
+            set_megalo_hover_provider(None)
             return
-        if not is_linked(folder):
-            bottom.problems_panel.clear()
-            self.scripts_panel.show_unlinked(folder)
-            return
-        checked = api.check(folder)  # a broken project still carries what it last built
-        profiles = api.profiles(folder)
+        envs = api.envs(folder)
         bottom.problems_panel.set_problems(problems_from_diagnostics(folder, checked.diagnostics))
-        self.scripts_panel.show_link(folder, checked.link_result, profiles.names, profiles.active)
+        if is_linked(folder):
+            self.scripts_panel.show_link(folder, checked.link_result, envs)
+        else:
+            self.scripts_panel.show_single(folder, checked.link_result, envs)
+        self._refresh_docs(folder, checked)
+
+    def _refresh_docs(self, folder: Path | None, checked=None) -> None:
+        """The Documentation view and the editor's hover text for ``folder``'s script. ``checked`` is an ``api.check``
+        of it just made, reused rather than linking again."""
+        from in_reach import api
+        from in_reach.app.script_project.docs import hover_texts
+
+        if folder is None:
+            self.documentation_panel.show_nothing()
+            set_megalo_hover_provider(None)
+            return
+        try:
+            result = api.docs(folder, write=False, checked=checked)
+        except (api.ApiError, OSError):
+            self.documentation_panel.show_nothing()
+            set_megalo_hover_provider(None)
+            return
+        self.documentation_panel.show_docs(folder, result.docs)
+        texts = hover_texts(result.docs)
+        scripts = (folder / "script").resolve()
+
+        def hover(path: Path | None, name: str) -> str | None:
+            if path is None or scripts not in Path(path).resolve().parents:
+                return None
+            return texts.get(name)
+
+        set_megalo_hover_provider(hover)
+
+    def refresh_documentation(self) -> None:
+        """The Documentation view's Refresh."""
+        self._refresh_docs(self.explorer_panel.current_folder)
+
+    def open_docs_overview(self) -> None:
+        """"Open Documentation Overview" -- writes ``build/docs/overview.md`` and ``overview.json`` (what a person or a
+        language model reads outside the IDE) and opens the overview. A no-op with no project open."""
+        folder = self.explorer_panel.current_folder
+        if folder is None:
+            return
+        from in_reach import api
+        from in_reach.app.script_project.docs import OVERVIEW_MD, docs_dir
+
+        try:
+            api.docs(folder, write=True)
+        except (api.ApiError, OSError) as exc:
+            QMessageBox.critical(self, "in-reach", f"Couldn't write the documentation:\n{exc}")
+            return
+        self.main_panel.active_pane.open_file(docs_dir(folder) / OVERVIEW_MD, force_reload=True)
+
+    def create_script_readme(self) -> None:
+        """The Documentation view's Add README -- creates ``script/README.md`` (never over an existing one) and opens
+        it. Its text heads the documentation page."""
+        folder = self.explorer_panel.current_folder
+        if folder is None:
+            return
+        from in_reach.app import new_project
+
+        readme = folder / "script" / "README.md"
+        if not readme.exists():
+            title = new_project.read_project_title(folder) or folder.name
+            readme.parent.mkdir(parents=True, exist_ok=True)
+            readme.write_text(
+                f"# {title}\n\nWhat this game mode is, and how it plays.\n\n"
+                "This file heads the Documentation view and `build/docs/overview.md`. Notes in the script itself are "
+                "`-- @doc` lines, and `-- @tags a, b` says what a file is about.\n",
+                encoding="utf-8",
+            )
+        self.main_panel.active_pane.open_file(readme)
+        self._refresh_docs(folder)
+
+    # -- checking as you type -----------------------------------------------------------------------
+
+    #: How long typing has to pause before the script is checked again.
+    CHECK_AS_YOU_TYPE_MS = 400
+
+    def _on_text_edited(self, editor) -> None:
+        """An editor's text changed: if it is part of the active project's script (its ``output.txt``, a ``.mgl``, a
+        manifest or an env file), check it again once typing pauses -- unsaved, via ``api.check_text``."""
+        folder = self.explorer_panel.current_folder if hasattr(self, "explorer_panel") else None
+        path = getattr(editor, "path", None)
+        timer = getattr(self, "_check_timer", None)
+        if folder is None or path is None or timer is None:
+            return
+        try:
+            Path(path).resolve().relative_to((folder / "script").resolve())
+        except ValueError:
+            return
+        if not (is_megalo_path(path) or Path(path).suffix.lower() in (".env", ".toml")):
+            return
+        self._typed_editor = editor
+        timer.start()
+
+    def _check_typed_script(self) -> None:
+        """Checks the editor :meth:`_on_text_edited` last saw, as it is now, and shows what it finds on the Problems
+        tab. An env file is checked on its own, so its problems replace only that file's; anything else is checked
+        with the whole script, so they replace everything."""
+        editor, self._typed_editor = getattr(self, "_typed_editor", None), None
+        folder = self.explorer_panel.current_folder
+        if editor is None or folder is None or getattr(editor, "path", None) is None:
+            return
+        from in_reach import api
+        from in_reach_ide.problems_panel import problems_from_diagnostics
+
+        path = Path(editor.path)
+        try:
+            checked = api.check_text(folder, path, editor.toPlainText())
+        except (api.ApiError, OSError):
+            return
+        problems = problems_from_diagnostics(folder, checked.diagnostics)
+        panel = self.bottom_panel.problems_panel
+        if path.suffix.lower() == ".env":
+            problems = [p for p in panel.problems() if p.path != path] + problems
+        panel.set_problems(problems)
+
+    # -- script projects (script/project.toml) ------------------------------------------------------
 
     def _compose(self, action) -> None:
         """Runs an edit of the script project's composition (``action`` calls one of the ``in_reach.api`` edit functions), then
@@ -2910,7 +3117,7 @@ class MainWindow(QWidget):
         self.bottom_panel.show_problems()
 
     def _on_problem_activated(self, path: Path, line_number: int) -> None:
-        """A row of the Problems tab: opens its file, at its line when it has one."""
+        """A row of the Problems tab (or a note in the Documentation view): opens its file, at its line when it has one."""
         if line_number > 0:
             self.main_panel.active_pane.open_file_at_line(path, line_number)
         else:
@@ -2918,7 +3125,7 @@ class MainWindow(QWidget):
 
     def _report_build_problems(self, folder: Path, result) -> None:
         """Shows an Apply's compiler messages on the Problems tab. A failed build replaces what was there and brings the
-        tab forward; a successful one only adds the warnings the project's own check didn't already list."""
+        tab forward; a successful one only adds the warnings the script's own check didn't already list."""
         from in_reach.app.script_project import is_linked
         from in_reach_ide.problems_panel import problems_from_build
 
@@ -2936,31 +3143,22 @@ class MainWindow(QWidget):
             panel.set_problems(panel.problems() + extra)
 
     def check_script_project(self) -> None:
-        """"Check Script Project" -- runs the active script project's checks (project model, lint, allocation, fusion)
-        and shows the result on the Problems tab, without writing anything. A project that isn't a script project says
-        so. A no-op with no project open."""
+        """"Check Script" -- runs the active project's script checks (annotations, lint, allocation; for a script project
+        also its modules and fusion) and shows the result on the Problems tab, without writing anything. A no-op with no
+        project open."""
         folder = self.explorer_panel.current_folder
         if folder is None:
             return
-        from in_reach.app.script_project import is_linked
-
-        if not is_linked(folder):
-            QMessageBox.information(
-                self, "in-reach",
-                "This project's script is a single file, script/output.txt, so there is nothing to check here.\n\n"
-                "Use \"Create Script Project\" to split it into blocks and modules.",
-            )
-            return
         self._refresh_script_views(folder)
         errors, warnings = self.bottom_panel.problems_panel.counts()
-        _logger.info("checked the script project of %s: %d error(s), %d warning(s)", folder, errors, warnings)
+        _logger.info("checked the script of %s: %d error(s), %d warning(s)", folder, errors, warnings)
         if errors or warnings:
             self.view_problems()
 
     def link_script_project(self) -> None:
         """"Link Script Project" -- assembles the active script project into ``build/Compiled.txt`` and its link map
         (and adds any trait sets, options and widgets it declares to ``settings/script_settings.json``) without
-        compiling. Problems go to the Problems tab. A no-op with no project open or for a single-file project."""
+        compiling. Problems go to the Problems tab. For a single-file project it is a Check (Apply links it)."""
         folder = self.explorer_panel.current_folder
         if folder is None:
             return
@@ -2968,7 +3166,7 @@ class MainWindow(QWidget):
         from in_reach.app.script_project import is_linked
 
         if not is_linked(folder):
-            self.check_script_project()  # says why there is nothing to link
+            self.check_script_project()
             return
         result = api.link(folder, write=True)
         _logger.info(
@@ -2979,10 +3177,10 @@ class MainWindow(QWidget):
         if not result.ok:
             self.view_problems()
 
-    def create_script_project(self) -> None:
-        """"Create Script Project" -- turns the active project's single script into a script project: adds
-        ``script/project.toml`` and moves the script into ``script/blocks/main.mgl`` (asks first). A no-op with no
-        project open."""
+    def convert_to_project(self) -> None:
+        """"Convert to Project" (experimental) -- turns the active project's single script into a script project: adds
+        ``script/project.toml`` and copies the script into ``script/blocks/main.mgl``. Asks first, offering to back
+        ``script/`` up to ``.in-reach/backups/`` before converting. A no-op with no project open."""
         folder = self.explorer_panel.current_folder
         if folder is None:
             return
@@ -2992,28 +3190,57 @@ class MainWindow(QWidget):
         if script_project.is_linked(folder):
             QMessageBox.information(self, "in-reach", "This project is already a script project.")
             return
-        if not self._confirm_create_script_project():
+        choice = self._confirm_convert_to_project()
+        if choice == "cancel":
             return
+        backup = None
+        if choice == "backup":
+            try:
+                backup = api.backup_script(folder)
+            except (api.ApiError, OSError) as exc:
+                QMessageBox.critical(self, "in-reach", f"Couldn't back the script up, so nothing was converted:\n{exc}")
+                return
+            _logger.info("backed up the script of %s to %s", folder, backup)
         try:
             written = api.create_script_project(folder)
         except (api.ApiError, OSError) as exc:
-            QMessageBox.critical(self, "in-reach", f"Couldn't create a script project:\n{exc}")
+            QMessageBox.critical(self, "in-reach", f"Couldn't convert to a script project:\n{exc}")
             return
-        _logger.info("created a script project for %s", folder)
+        _logger.info("converted %s to a script project", folder)
         self._refresh_script_views(folder)
         self._refresh_apply_enabled(folder)
         self.main_panel.active_pane.open_file(folder / written[-1])
+        if backup is not None:
+            self._report_backup(backup)
 
-    def _confirm_create_script_project(self) -> bool:
-        """Kept as its own method purely as a test seam, same convention as :meth:`_confirm_overwrite_rvt_changes`."""
-        answer = QMessageBox.question(
-            self,
-            "in-reach",
-            "Turn this project's script into a script project?\n\n"
-            "script/output.txt is copied to script/blocks/main.mgl and script/project.toml is added. From then on the "
-            "project is built from its blocks and modules, and script/output.txt is no longer compiled.",
+    def _confirm_convert_to_project(self) -> str:
+        """``"backup"`` (back up, then convert), ``"convert"`` or ``"cancel"``. A test seam, same convention as
+        :meth:`_confirm_overwrite_rvt_changes`."""
+        box = QMessageBox(self)
+        box.setIcon(QMessageBox.Icon.Warning)
+        box.setWindowTitle("Convert to Project (experimental)")
+        box.setText("Convert this script into a script project?")
+        box.setInformativeText(
+            "This is experimental. script/output.txt is copied to script/blocks/main.mgl and script/project.toml is "
+            "added; from then on the project is built from its blocks and modules, and script/output.txt is no longer "
+            "compiled. There is no automatic way back.\n\n"
+            "A backup first is recommended: Back Up && Convert copies script/ to .in-reach/backups/ before converting."
         )
-        return answer == QMessageBox.StandardButton.Yes
+        backup_button = box.addButton("Back Up && Convert", QMessageBox.ButtonRole.AcceptRole)
+        convert_button = box.addButton("Convert", QMessageBox.ButtonRole.DestructiveRole)
+        box.addButton(QMessageBox.StandardButton.Cancel)
+        box.setDefaultButton(backup_button)
+        box.exec()
+        clicked = box.clickedButton()
+        if clicked is backup_button:
+            return "backup"
+        if clicked is convert_button:
+            return "convert"
+        return "cancel"
+
+    def _report_backup(self, path: Path) -> None:
+        """Says where the backup went. A test seam."""
+        QMessageBox.information(self, "in-reach", f"The script was backed up to:\n{path}")
 
     def new_script_module(self) -> None:
         """"New Script Module" -- asks for a name and adds a module to the active script project (a folder under
@@ -3025,7 +3252,9 @@ class MainWindow(QWidget):
         from in_reach.app import script_project
 
         if not script_project.is_linked(folder):
-            self.check_script_project()  # says why, and how to make it a script project
+            QMessageBox.information(
+                self, "in-reach", "Modules belong to a script project: use Convert to Project (in the Scripts view) first."
+            )
             return
         name = self._ask_module_name()
         if not name:
@@ -3040,7 +3269,7 @@ class MainWindow(QWidget):
         self.main_panel.active_pane.open_file(folder / written[1])
 
     def _ask_module_name(self) -> str:
-        """The new module's name, or ``""`` if cancelled. A test seam, like :meth:`_confirm_create_script_project`."""
+        """The new module's name, or ``""`` if cancelled. A test seam, like :meth:`_confirm_convert_to_project`."""
         from PyQt6.QtWidgets import QInputDialog
 
         name, accepted = QInputDialog.getText(self, "New Script Module", "Module name:")

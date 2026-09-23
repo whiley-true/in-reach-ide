@@ -280,27 +280,30 @@ def test_switching_theme_recolours_a_diff_tab(window: MainWindow) -> None:
 # -- the Scripts panel's background ---------------------------------------------------------------
 
 
-def test_the_scripts_panel_fills_its_scroll_area_with_the_base_colour(qtbot) -> None:
+def test_the_scripts_panel_paints_nothing_of_its_own_so_the_sidebar_border_shows(qtbot) -> None:
     panel = ScriptsPanel()
     qtbot.addWidget(panel)
     scroll = panel.findChild(QScrollArea)
 
-    for widget in (scroll, scroll.viewport()):
-        assert widget.backgroundRole() == QPalette.ColorRole.Base
-        assert widget.autoFillBackground()
+    for widget in (scroll, scroll.viewport(), scroll.widget()):
+        assert not widget.autoFillBackground()  # a filled area flush with the card's edge painted over its border
+        # ... and no stylesheet does it instead: an unscoped `background: transparent` cascades into the trees' headers
+        # and the buttons, which then paint black.
+        assert widget.styleSheet() == ""
 
 
-def test_the_scripts_panel_paints_the_theme_base_not_the_window_colour(qtbot) -> None:
+def test_the_scripts_panel_shows_the_theme_base_not_the_window_colour_and_keeps_the_border(window) -> None:
     theme_module.apply_theme(QApplication.instance(), "Whiley")
-    panel = ScriptsPanel()
-    qtbot.addWidget(panel)
-    panel.resize(300, 300)
-    panel.show()
+    window._sidebar_stack.setCurrentWidget(window.scripts_panel)
+    window._show_sidebar(True)
+    window.resize(1200, 800)
     QApplication.processEvents()
 
-    image = panel.grab().toImage()
+    sidebar = window.primary_sidebar
+    image = sidebar.grab().toImage()
     colors = theme_module.load_theme("Whiley").palette_colors
-    pixel = image.pixelColor(image.width() - 20, image.height() - 20)  # empty space below the content
+    inside = image.pixelColor(image.width() // 2, image.height() - 20)  # empty space below the panel's content
+    edge = image.pixelColor(0, image.height() // 2)  # the card's left border, level with the panel
 
-    assert pixel == QColor(colors["base"])
-    assert pixel != QColor(colors["window"])
+    assert inside == QColor(colors["base"]) and inside != QColor(colors["window"])
+    assert edge != inside  # the border is drawn there, not covered by the panel

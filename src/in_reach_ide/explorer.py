@@ -7,8 +7,8 @@ project, top to bottom (PROMPT.md: "please move stats to the top of the panel") 
 summarizing its build's own space usage and per-subsystem (Triggers/Conditions/Actions/Forge
 Labels/Strings) counts against this project's own confirmed engine caps (see
 :func:`~in_reach.app.rvt.settings_io.load_build_stats`/:func:`~in_reach.app.rvt.strings_io.
-count_script_strings`/:data:`_MAX_TRIGGERS` et al.), "Quick Launch" (the Export File/Launch RVT/
-View Compiled button row, plus "Built-in"/"Hot Reload" buttons that open the matching
+count_script_strings`/:data:`_MAX_TRIGGERS` et al.), "Quick Launch" (Export File and Launch RVT on one
+row, View Compiled Megalo across the next -- View Decompiled is the Scripts view's -- plus "Built-in"/"Hot Reload" buttons that open the matching
 :mod:`within_reach.system_verify`-resolved folder in the OS file explorer), and "Settings" pointed
 at its own ``settings/`` subfolder. There used to be a fourth, generic "browse the whole project
 folder" tree too; PROMPT.md asked for it to go now that Script/Settings cover the two subfolders
@@ -278,8 +278,6 @@ class ExplorerPanel(QWidget):
     #: does (compiling + a save-as dialog; regenerating and opening the locked output view).
     export_requested = pyqtSignal()
     view_output_requested = pyqtSignal()
-    #: "View Decompiled" -- the built script as RVT shows it, next to "View Compiled".
-    view_decompiled_requested = pyqtSignal()
 
     #: PROMPT.md: "we are removing locations, and rvt ... please add a button in between Export
     #: File and View Compiled ... for Launch RVT" -- replaces the activity bar's own former RVT
@@ -427,9 +425,13 @@ class ExplorerPanel(QWidget):
         # and make sure compiled is aligning next to the other buttons" -- Export File/Launch RVT on
         # the left, View Compiled pushed to the right by the stretch between them, exactly the
         # reference image's own row.
+        # Two rows -- Export File and Launch RVT, then View Compiled Megalo across the whole width -- so no button's
+        # text is squeezed the way three or four on one row of a narrow sidebar were. Each fills its share of the row.
         button_row = QWidget()
-        button_row_layout = QHBoxLayout(button_row)
+        button_row_layout = QGridLayout(button_row)
         button_row_layout.setContentsMargins(0, 0, 0, 0)
+        button_row_layout.setHorizontalSpacing(6)
+        button_row_layout.setVerticalSpacing(6)
         self.export_button = QToolButton()
         # PROMPT.md: "rename export RVT file to be 'Export File'".
         self.export_button.setText("Export File")
@@ -438,7 +440,7 @@ class ExplorerPanel(QWidget):
         self.export_button.setAutoRaise(False)
         self.export_button.setStyleSheet(_DASHBOARD_BUTTON_STYLE)
         self.export_button.clicked.connect(self.export_requested.emit)
-        button_row_layout.addWidget(self.export_button)
+        button_row_layout.addWidget(self.export_button, 0, 0)
         # PROMPT.md: "please add a button in between Export File and View Compiled ... for Launch
         # RVT" -- disabled with no project open, same as the activity bar's own former RVT icon
         # (see MainWindow.launch_rvt's own docstring for why).
@@ -450,25 +452,20 @@ class ExplorerPanel(QWidget):
         self.rvt_button.setStyleSheet(_DASHBOARD_BUTTON_STYLE)
         self.rvt_button.setEnabled(False)
         self.rvt_button.clicked.connect(self.launch_rvt_requested.emit)
-        button_row_layout.addWidget(self.rvt_button)
-        button_row_layout.addStretch(1)
+        button_row_layout.addWidget(self.rvt_button, 0, 1)
         self.view_output_button = QToolButton()
-        # PROMPT.md: "View Compiled (renamed from View Compiled.txt)".
-        self.view_output_button.setText("View Compiled")
+        self.view_output_button.setText("View Compiled Megalo")
         self.view_output_button.setToolTip("Open a read-only view of this project's compiled Megalo script")
         self.view_output_button.setCursor(Qt.CursorShape.PointingHandCursor)
         self.view_output_button.setAutoRaise(False)
         self.view_output_button.setStyleSheet(_DASHBOARD_BUTTON_STYLE)
         self.view_output_button.clicked.connect(self.view_output_requested.emit)
-        button_row_layout.addWidget(self.view_output_button)
-        self.view_decompiled_button = QToolButton()
-        self.view_decompiled_button.setText("View Decompiled")
-        self.view_decompiled_button.setToolTip("Open a read-only view of the built script as ReachVariantTool shows it")
-        self.view_decompiled_button.setCursor(Qt.CursorShape.PointingHandCursor)
-        self.view_decompiled_button.setAutoRaise(False)
-        self.view_decompiled_button.setStyleSheet(_DASHBOARD_BUTTON_STYLE)
-        self.view_decompiled_button.clicked.connect(self.view_decompiled_requested.emit)
-        button_row_layout.addWidget(self.view_decompiled_button)
+        button_row_layout.addWidget(self.view_output_button, 1, 0, 1, 2)
+        # (View Decompiled is the Scripts view's now, beside the rest of the script's own tools.)
+        for button in (self.export_button, self.rvt_button, self.view_output_button):
+            button.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed)
+        button_row_layout.setColumnStretch(0, 1)
+        button_row_layout.setColumnStretch(1, 1)
         self.button_row = button_row
         quick_launch_layout.addWidget(self.button_row)
 

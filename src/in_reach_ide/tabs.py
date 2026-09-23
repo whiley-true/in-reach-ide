@@ -132,10 +132,21 @@ def _on_editor_cursor_changed(widget: TextEditorWidget) -> None:
         pane.cursor_info_changed.emit()
 
 
+def _on_editor_edited(widget: TextEditorWidget) -> None:
+    # The owning area's on_text_edited hook (checking a script as it is typed), looked up dynamically for the same reason
+    # as _on_editor_modified: a tab can change panes, and a popout's area is a different one.
+    pane = getattr(widget, "_owner_pane", None)
+    area = getattr(pane, "_area", None) if pane is not None else None
+    hook = getattr(area, "on_text_edited", None)
+    if hook is not None:
+        hook(widget)
+
+
 def _connect_editor_signals(editor: TextEditorWidget) -> None:
     editor.document().modificationChanged.connect(
         lambda modified, w=editor: _on_editor_modified(w, modified)
     )
+    editor.document().contentsChanged.connect(lambda w=editor: _on_editor_edited(w))
     editor.save_requested.connect(lambda w=editor: _on_editor_save_requested(w))
     editor.cursorPositionChanged.connect(lambda w=editor: _on_editor_cursor_changed(w))
     editor.selectionChanged.connect(lambda w=editor: _on_editor_cursor_changed(w))
@@ -1172,6 +1183,7 @@ class MainPanelArea(QWidget):
         on_file_saved: Callable[[Path], None] | None = None,
         project_title: Callable[[], str] | None = None,
         on_cursor_info: Callable[["TabPane", StatusBar], None] | None = None,
+        on_text_edited: Callable[[TextEditorWidget], None] | None = None,
     ) -> None:
         super().__init__(parent)
         self.root_dir = root_dir or Path.cwd()
@@ -1179,6 +1191,9 @@ class MainPanelArea(QWidget):
         self.on_project_opened = on_project_opened
         self.on_settings_changed = on_settings_changed
         self.on_file_saved = on_file_saved
+        #: Called with an editor whenever its text changes (typing, not only saving) -- how the window checks a script
+        #: as it is typed.
+        self.on_text_edited = on_text_edited
         #: PROMPT.md: "the top of the popout window should be called the gametype name (so that if
         #: multiple projects with multiple popouts are open it doesnt get confusing)" -- injectable
         #: (MainWindow passes the active project's own title, see :meth:`move_tab_to_new_window`),
