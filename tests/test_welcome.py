@@ -1,7 +1,7 @@
 from pathlib import Path
 
 import pytest
-from PyQt6.QtWidgets import QDialog
+from PyQt6.QtWidgets import QDialog, QLabel
 
 from in_reach.app import env_file, new_project
 from within_reach import system_verify
@@ -10,7 +10,6 @@ from in_reach.app.categories import EngineCategory
 from in_reach.app.rvt import rvt_bridge
 from within_reach.system_verify import Outcome, VerifyRun
 from in_reach_ide.new_project_dialog import NewProjectDialog
-from in_reach_ide.settings_info_dialog import SettingsInfoDialog
 from in_reach_ide.verify_dialog import VerifyDialog
 from in_reach_ide.welcome import WelcomeTab
 
@@ -71,66 +70,64 @@ def test_quadrants_have_no_border_outline(welcome: WelcomeTab) -> None:
     for frame in (
         welcome.new_blank_button.parentWidget(),
         welcome._recent_layout.parentWidget(),
-        welcome.verify_tabs.parentWidget(),
     ):
         assert frame.styleSheet() == ""
 
 
-# -- the verify quadrant -----------------------------------------------------------------------------
+# -- verifying the install ------------------------------------------------------------------------------------
 
 
-def test_the_verify_quadrant_has_a_steam_tab_and_an_empty_custom_tab(welcome: WelcomeTab) -> None:
-    labels = [welcome.verify_tabs.tabText(i) for i in range(welcome.verify_tabs.count())]
-
-    assert labels == ["Steam (Halo MCC)", "Custom"]
-
-
-def test_a_fresh_project_shows_zero_of_thirteen_verified(welcome: WelcomeTab) -> None:
-    total = len(system_verify.STEPS)
-    assert welcome.verified_count_label.text() == f"0 of {total} settings verified."
+def test_the_welcome_tab_has_no_verify_section(welcome: WelcomeTab) -> None:
+    assert not hasattr(welcome, "verify_now_button") and not hasattr(welcome, "verify_tabs")
+    texts = [label.text() for label in welcome.findChildren(QLabel)]
+    assert "Verify System Settings" not in texts
 
 
-def test_refresh_updates_the_count_as_the_env_gains_values(welcome: WelcomeTab, root_dir: Path) -> None:
-    _set(root_dir, system_verify.STEAM_KEY, r"C:\Steam")
+def _window(qtbot, root_dir: Path):
+    from in_reach_ide.main_window import MainWindow
 
-    welcome.refresh()
-
-    total = len(system_verify.STEPS)
-    assert welcome.verified_count_label.text() == f"1 of {total} settings verified."
-
-    _set(root_dir, system_verify.HALO_MCC_KEY, r"C:\Steam\mcc")
-    welcome.refresh()
-
-    assert welcome.verified_count_label.text() == f"2 of {total} settings verified."
+    window = MainWindow(root_dir=root_dir)
+    qtbot.addWidget(window)
+    return window
 
 
-def test_clear_entries_resets_the_count_to_zero(welcome: WelcomeTab, root_dir: Path) -> None:
-    for step in system_verify.STEPS:
-        _set(root_dir, step.env_key, "value")
-    welcome.refresh()
-    total = len(system_verify.STEPS)
-    assert welcome.verified_count_label.text() == f"{total} of {total} settings verified."
+def test_a_fresh_install_opens_verification_by_itself(qtbot, root_dir: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    opened = []
+    monkeypatch.setattr(VerifyDialog, "start", lambda self: None)
+    monkeypatch.setattr(VerifyDialog, "exec", lambda self: opened.append(self) or QDialog.DialogCode.Accepted)
+    window = _window(qtbot, root_dir)
 
-    welcome.clear_entries_button.click()
-
-    assert welcome.verified_count_label.text() == f"0 of {total} settings verified."
-
-
-def test_what_is_this_button_opens_the_settings_info_dialog(
-    welcome: WelcomeTab, monkeypatch: pytest.MonkeyPatch
-) -> None:
-    opened: list[SettingsInfoDialog] = []
-
-    def fake_exec(dialog: SettingsInfoDialog) -> int:
-        opened.append(dialog)
-        return QDialog.DialogCode.Accepted
-
-    monkeypatch.setattr(SettingsInfoDialog, "exec", fake_exec)
-
-    welcome.what_is_this_button.click()
+    window.verify_on_first_run()
 
     assert len(opened) == 1
-    assert opened[0].windowTitle() == "What is this?"
+
+
+def test_once_something_is_verified_it_does_not_open_again(qtbot, root_dir: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    _set(root_dir, system_verify.STEAM_KEY, r"C:\Steam")
+    monkeypatch.setattr(VerifyDialog, "exec", lambda self: pytest.fail("opened"))
+    window = _window(qtbot, root_dir)
+
+    window.verify_on_first_run()
+
+
+def test_verify_system_settings_is_in_the_palette_and_refreshes_the_welcome_tab(
+    qtbot, root_dir: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    def fake_exec(dialog: VerifyDialog) -> int:
+        for step in system_verify.STEPS:
+            _set(root_dir, step.env_key, "value")
+        dialog.run_finished.emit()
+        return QDialog.DialogCode.Accepted
+
+    monkeypatch.setattr(VerifyDialog, "start", lambda self: None)
+    monkeypatch.setattr(VerifyDialog, "exec", fake_exec)
+    window = _window(qtbot, root_dir)
+    welcome = window.main_panel.active_pane.widget(0)
+    assert not welcome.new_builtin_button.isEnabled()
+
+    next(c for c in window.build_command_palette_commands() if c.label == "Verify System Settings").action()
+
+    assert welcome.new_builtin_button.isEnabled()
 
 
 # -- the Start quadrant -----------------------------------------------------------------------------
@@ -192,7 +189,7 @@ def test_new_blank_project_scaffolds_a_folder_and_lands_in_recent(
     # there's always something for RVT to open and something that got decompiled into settings/.
     bin_path = new_project.source_variant_path(welcome.project_dir, folder)
     assert bin_path.is_file()
-    assert (folder / "script" / "output.txt").is_file()
+    assert (folder / "script" / "output.mgl").is_file()
     # ... and it is built once straight away, so "View Decompiled" has a .bin to show.
     assert new_project.compiled_variant_path(folder).is_file()
 
@@ -503,6 +500,13 @@ def test_new_project_dialog_asks_game_type_only_for_a_blank_project(qtbot) -> No
     assert dialog.category() == EngineCategory.none
 
 
+def test_a_new_projects_category_is_slayer_unless_another_is_chosen(qtbot, tmp_path: Path) -> None:
+    for dialog in (NewProjectDialog(ask_game_type=True), NewProjectDialog(variants=[("Slayer", tmp_path / "Slayer.bin")])):
+        qtbot.addWidget(dialog)
+        assert dialog.category() == EngineCategory.slayer
+        assert dialog.category_combo.currentText() == "Slayer"
+
+
 def test_new_project_dialog_without_ask_game_type_has_no_game_type_picker(qtbot) -> None:
     dialog = NewProjectDialog()
     qtbot.addWidget(dialog)
@@ -743,18 +747,3 @@ def test_verify_dialog_stores_a_manually_picked_steam_account_by_id_not_by_path(
     assert env_file.get_env_values(root_dir / ".in-reach" / ".env")[system_verify.STEAM_ACCOUNT_KEY] == "333"
 
 
-def test_verify_now_refreshes_the_count_when_the_run_finishes(
-    welcome: WelcomeTab, root_dir: Path, monkeypatch: pytest.MonkeyPatch
-) -> None:
-    def fake_exec(dialog: VerifyDialog) -> int:
-        _set(root_dir, system_verify.STEAM_KEY, r"C:\Steam")
-        dialog.run_finished.emit()
-        return QDialog.DialogCode.Accepted
-
-    monkeypatch.setattr(VerifyDialog, "start", lambda self: None)
-    monkeypatch.setattr(VerifyDialog, "exec", fake_exec)
-
-    welcome.verify_now_button.click()
-
-    total = len(system_verify.STEPS)
-    assert welcome.verified_count_label.text() == f"1 of {total} settings verified."

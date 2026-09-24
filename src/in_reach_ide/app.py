@@ -10,6 +10,7 @@ from __future__ import annotations
 import sys
 from pathlib import Path
 
+from PyQt6.QtCore import QTimer
 from PyQt6.QtWidgets import QApplication
 
 from in_reach.app import env_file, logging_setup
@@ -107,6 +108,8 @@ def run(project_dir: Path) -> int:
     # window was still in its pre-maximized state, so without this the icon stays wrong until the
     # button's own toggle_maximize() happens to run once.
     window.refresh_icon_colors()
+    # A fresh install: the verification flow opens by itself, once the window is up.
+    QTimer.singleShot(0, window.verify_on_first_run)
 
     exit_code = app.exec()
     _logger.info("IDE exiting (code=%d)", exit_code)

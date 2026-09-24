@@ -18,7 +18,7 @@ def panel(qtbot) -> GitPanel:
 def _project(tmp_path: Path) -> Path:
     folder = tmp_path / "abcd1234"
     folder.mkdir()
-    (folder / "Notes.txt").write_text("hi\n", encoding="utf-8")
+    (folder / "notes.md").write_text("hi\n", encoding="utf-8")
     return folder
 
 
@@ -542,13 +542,13 @@ def test_a_clean_project_shows_zero_uncommitted_changes(panel: GitPanel, tmp_pat
 def test_an_edited_file_shows_up_as_an_uncommitted_change(panel: GitPanel, tmp_path: Path) -> None:
     folder = _project(tmp_path)
     vcs.init(folder)
-    (folder / "Notes.txt").write_text("edited\n", encoding="utf-8")
+    (folder / "notes.md").write_text("edited\n", encoding="utf-8")
 
     panel.set_project(folder)
 
     assert panel.uncommitted_count == 1
     assert panel.changes_section._toggle.text() == "Changes (1)"
-    assert panel.changes_list.item(0).text() == "M  Notes.txt"
+    assert panel.changes_list.item(0).text() == "M  notes.md"
 
 
 def test_clicking_a_changed_file_emits_diff_file_requested_with_its_path(panel: GitPanel, tmp_path: Path) -> None:
@@ -556,14 +556,14 @@ def test_clicking_a_changed_file_emits_diff_file_requested_with_its_path(panel: 
     # showing the original on the left and highlighted changes on the right (like vscode git)".
     folder = _project(tmp_path)
     vcs.init(folder)
-    (folder / "Notes.txt").write_text("edited\n", encoding="utf-8")
+    (folder / "notes.md").write_text("edited\n", encoding="utf-8")
     panel.set_project(folder)
     emitted = []
     panel.diff_file_requested.connect(emitted.append)
 
     panel.changes_list.itemClicked.emit(panel.changes_list.item(0))
 
-    assert emitted == ["Notes.txt"]
+    assert emitted == ["notes.md"]
 
 
 def test_commit_button_stays_disabled_with_no_message_even_if_something_is_staged(
@@ -571,7 +571,7 @@ def test_commit_button_stays_disabled_with_no_message_even_if_something_is_stage
 ) -> None:
     folder = _project(tmp_path)
     vcs.init(folder)
-    (folder / "Notes.txt").write_text("edited\n", encoding="utf-8")
+    (folder / "notes.md").write_text("edited\n", encoding="utf-8")
     vcs.stage_all(folder)
     panel.set_project(folder)
 
@@ -589,7 +589,7 @@ def test_commit_button_stays_disabled_with_a_message_when_nothing_is_staged(
     # unstaged change alone doesn't enable Commit, even with a message typed.
     folder = _project(tmp_path)
     vcs.init(folder)
-    (folder / "Notes.txt").write_text("edited\n", encoding="utf-8")
+    (folder / "notes.md").write_text("edited\n", encoding="utf-8")
     panel.set_project(folder)
 
     panel.commit_message_edit.setText("fix notes")
@@ -612,7 +612,7 @@ def test_commit_button_stays_disabled_with_a_message_but_nothing_uncommitted(
 def test_commit_button_emits_commit_requested_with_the_typed_message(panel: GitPanel, tmp_path: Path) -> None:
     folder = _project(tmp_path)
     vcs.init(folder)
-    (folder / "Notes.txt").write_text("edited\n", encoding="utf-8")
+    (folder / "notes.md").write_text("edited\n", encoding="utf-8")
     vcs.stage_all(folder)
     panel.set_project(folder)
     panel.commit_message_edit.setText("fix notes")
@@ -627,7 +627,7 @@ def test_commit_button_emits_commit_requested_with_the_typed_message(panel: GitP
 def test_pressing_enter_in_the_commit_message_box_also_commits(panel: GitPanel, tmp_path: Path) -> None:
     folder = _project(tmp_path)
     vcs.init(folder)
-    (folder / "Notes.txt").write_text("edited\n", encoding="utf-8")
+    (folder / "notes.md").write_text("edited\n", encoding="utf-8")
     vcs.stage_all(folder)
     panel.set_project(folder)
     panel.commit_message_edit.setText("fix notes")
@@ -659,30 +659,30 @@ def test_clear_commit_message_empties_the_box(panel: GitPanel, tmp_path: Path) -
 def test_an_unstaged_change_shows_up_in_the_changes_list_only(panel: GitPanel, tmp_path: Path) -> None:
     folder = _project(tmp_path)
     vcs.init(folder)
-    (folder / "Notes.txt").write_text("edited\n", encoding="utf-8")
+    (folder / "notes.md").write_text("edited\n", encoding="utf-8")
 
     panel.set_project(folder)
 
     assert panel.staged_list.count() == 0
     assert panel.changes_list.count() == 1
-    assert panel.changes_list.item(0).text() == "M  Notes.txt"
-    assert panel.staged_label.text() == "Staged Changes (0)"
-    assert panel.changes_label.text() == "Changes (1)"
+    assert panel.changes_list.item(0).text() == "M  notes.md"
+    assert panel.staged_section.title == "Staged Changes (0)"
+    assert panel.unstaged_section.title == "Changes (1)"
 
 
 def test_a_staged_change_shows_up_in_the_staged_list_only(panel: GitPanel, tmp_path: Path) -> None:
     folder = _project(tmp_path)
     vcs.init(folder)
-    (folder / "Notes.txt").write_text("edited\n", encoding="utf-8")
-    vcs.stage(folder, ["Notes.txt"])
+    (folder / "notes.md").write_text("edited\n", encoding="utf-8")
+    vcs.stage(folder, ["notes.md"])
 
     panel.set_project(folder)
 
     assert panel.changes_list.count() == 0
     assert panel.staged_list.count() == 1
-    assert panel.staged_list.item(0).text() == "M  Notes.txt"
-    assert panel.staged_label.text() == "Staged Changes (1)"
-    assert panel.changes_label.text() == "Changes (0)"
+    assert panel.staged_list.item(0).text() == "M  notes.md"
+    assert panel.staged_section.title == "Staged Changes (1)"
+    assert panel.unstaged_section.title == "Changes (0)"
 
 
 def test_a_file_edited_again_after_staging_appears_in_both_lists(panel: GitPanel, tmp_path: Path) -> None:
@@ -691,24 +691,24 @@ def test_a_file_edited_again_after_staging_appears_in_both_lists(panel: GitPanel
     # is staged is essentially snapshotted".
     folder = _project(tmp_path)
     vcs.init(folder)
-    (folder / "Notes.txt").write_text("staged content\n", encoding="utf-8")
-    vcs.stage(folder, ["Notes.txt"])
-    (folder / "Notes.txt").write_text("further edit\n", encoding="utf-8")
+    (folder / "notes.md").write_text("staged content\n", encoding="utf-8")
+    vcs.stage(folder, ["notes.md"])
+    (folder / "notes.md").write_text("further edit\n", encoding="utf-8")
 
     panel.set_project(folder)
 
     assert panel.staged_list.count() == 1
-    assert panel.staged_list.item(0).text() == "M  Notes.txt"
+    assert panel.staged_list.item(0).text() == "M  notes.md"
     assert panel.changes_list.count() == 1
-    assert panel.changes_list.item(0).text() == "M  Notes.txt"
-    assert panel.staged_label.text() == "Staged Changes (1)"
-    assert panel.changes_label.text() == "Changes (1)"
+    assert panel.changes_list.item(0).text() == "M  notes.md"
+    assert panel.staged_section.title == "Staged Changes (1)"
+    assert panel.unstaged_section.title == "Changes (1)"
 
 
 def test_stage_all_button_emits_stage_requested_with_every_unstaged_path(panel: GitPanel, tmp_path: Path) -> None:
     folder = _project(tmp_path)
     vcs.init(folder)
-    (folder / "Notes.txt").write_text("edited\n", encoding="utf-8")
+    (folder / "notes.md").write_text("edited\n", encoding="utf-8")
     (folder / "new_file.txt").write_text("new\n", encoding="utf-8")
     panel.set_project(folder)
     emitted = []
@@ -716,7 +716,7 @@ def test_stage_all_button_emits_stage_requested_with_every_unstaged_path(panel: 
 
     panel.stage_all_button.click()
 
-    assert sorted(emitted[0]) == ["Notes.txt", "new_file.txt"]
+    assert sorted(emitted[0]) == ["new_file.txt", "notes.md"]
 
 
 def test_stage_all_button_does_nothing_when_theres_nothing_unstaged(panel: GitPanel, tmp_path: Path) -> None:
@@ -734,7 +734,7 @@ def test_stage_all_button_does_nothing_when_theres_nothing_unstaged(panel: GitPa
 def test_unstage_all_button_emits_unstage_requested_with_every_staged_path(panel: GitPanel, tmp_path: Path) -> None:
     folder = _project(tmp_path)
     vcs.init(folder)
-    (folder / "Notes.txt").write_text("edited\n", encoding="utf-8")
+    (folder / "notes.md").write_text("edited\n", encoding="utf-8")
     vcs.stage_all(folder)
     panel.set_project(folder)
     emitted = []
@@ -742,13 +742,13 @@ def test_unstage_all_button_emits_unstage_requested_with_every_staged_path(panel
 
     panel.unstage_all_button.click()
 
-    assert emitted == [["Notes.txt"]]
+    assert emitted == [["notes.md"]]
 
 
 def test_context_menu_open_changes_emits_diff_file_requested(panel: GitPanel, tmp_path: Path) -> None:
     folder = _project(tmp_path)
     vcs.init(folder)
-    (folder / "Notes.txt").write_text("edited\n", encoding="utf-8")
+    (folder / "notes.md").write_text("edited\n", encoding="utf-8")
     panel.set_project(folder)
     emitted = []
     panel.diff_file_requested.connect(emitted.append)
@@ -756,13 +756,13 @@ def test_context_menu_open_changes_emits_diff_file_requested(panel: GitPanel, tm
     menu = panel._build_change_context_menu(panel.changes_list, panel.changes_list.item(0))
     _trigger_action(menu, "Open Changes")
 
-    assert emitted == ["Notes.txt"]
+    assert emitted == ["notes.md"]
 
 
 def test_context_menu_open_file_emits_open_file_requested(panel: GitPanel, tmp_path: Path) -> None:
     folder = _project(tmp_path)
     vcs.init(folder)
-    (folder / "Notes.txt").write_text("edited\n", encoding="utf-8")
+    (folder / "notes.md").write_text("edited\n", encoding="utf-8")
     panel.set_project(folder)
     emitted = []
     panel.open_file_requested.connect(emitted.append)
@@ -770,13 +770,13 @@ def test_context_menu_open_file_emits_open_file_requested(panel: GitPanel, tmp_p
     menu = panel._build_change_context_menu(panel.changes_list, panel.changes_list.item(0))
     _trigger_action(menu, "Open File")
 
-    assert emitted == ["Notes.txt"]
+    assert emitted == ["notes.md"]
 
 
 def test_context_menu_open_file_head_emits_open_file_head_requested(panel: GitPanel, tmp_path: Path) -> None:
     folder = _project(tmp_path)
     vcs.init(folder)
-    (folder / "Notes.txt").write_text("edited\n", encoding="utf-8")
+    (folder / "notes.md").write_text("edited\n", encoding="utf-8")
     panel.set_project(folder)
     emitted = []
     panel.open_file_head_requested.connect(emitted.append)
@@ -784,13 +784,13 @@ def test_context_menu_open_file_head_emits_open_file_head_requested(panel: GitPa
     menu = panel._build_change_context_menu(panel.changes_list, panel.changes_list.item(0))
     _trigger_action(menu, "Open File (HEAD)")
 
-    assert emitted == ["Notes.txt"]
+    assert emitted == ["notes.md"]
 
 
 def test_context_menu_discard_emits_discard_requested(panel: GitPanel, tmp_path: Path) -> None:
     folder = _project(tmp_path)
     vcs.init(folder)
-    (folder / "Notes.txt").write_text("edited\n", encoding="utf-8")
+    (folder / "notes.md").write_text("edited\n", encoding="utf-8")
     panel.set_project(folder)
     emitted = []
     panel.discard_requested.connect(emitted.append)
@@ -798,13 +798,13 @@ def test_context_menu_discard_emits_discard_requested(panel: GitPanel, tmp_path:
     menu = panel._build_change_context_menu(panel.changes_list, panel.changes_list.item(0))
     _trigger_action(menu, "Discard Changes")
 
-    assert emitted == ["Notes.txt"]
+    assert emitted == ["notes.md"]
 
 
 def test_context_menu_reveal_emits_reveal_requested(panel: GitPanel, tmp_path: Path) -> None:
     folder = _project(tmp_path)
     vcs.init(folder)
-    (folder / "Notes.txt").write_text("edited\n", encoding="utf-8")
+    (folder / "notes.md").write_text("edited\n", encoding="utf-8")
     panel.set_project(folder)
     emitted = []
     panel.reveal_requested.connect(emitted.append)
@@ -812,13 +812,13 @@ def test_context_menu_reveal_emits_reveal_requested(panel: GitPanel, tmp_path: P
     menu = panel._build_change_context_menu(panel.changes_list, panel.changes_list.item(0))
     _trigger_action(menu, "Reveal in File Explorer")
 
-    assert emitted == ["Notes.txt"]
+    assert emitted == ["notes.md"]
 
 
 def test_context_menu_on_an_unstaged_item_offers_stage_not_unstage(panel: GitPanel, tmp_path: Path) -> None:
     folder = _project(tmp_path)
     vcs.init(folder)
-    (folder / "Notes.txt").write_text("edited\n", encoding="utf-8")
+    (folder / "notes.md").write_text("edited\n", encoding="utf-8")
     panel.set_project(folder)
     emitted = []
     panel.stage_requested.connect(emitted.append)
@@ -829,13 +829,13 @@ def test_context_menu_on_an_unstaged_item_offers_stage_not_unstage(panel: GitPan
     assert "Unstage Changes" not in labels
     _trigger_action(menu, "Stage Changes")
 
-    assert emitted == [["Notes.txt"]]
+    assert emitted == [["notes.md"]]
 
 
 def test_context_menu_on_a_staged_item_offers_unstage_not_stage(panel: GitPanel, tmp_path: Path) -> None:
     folder = _project(tmp_path)
     vcs.init(folder)
-    (folder / "Notes.txt").write_text("edited\n", encoding="utf-8")
+    (folder / "notes.md").write_text("edited\n", encoding="utf-8")
     vcs.stage_all(folder)
     panel.set_project(folder)
     emitted = []
@@ -847,7 +847,7 @@ def test_context_menu_on_a_staged_item_offers_unstage_not_stage(panel: GitPanel,
     assert "Stage Changes" not in labels
     _trigger_action(menu, "Unstage Changes")
 
-    assert emitted == [["Notes.txt"]]
+    assert emitted == [["notes.md"]]
 
 
 # -- History "Files Changed" (PROMPT.md, a later pass: "please make it so that when clicking in
@@ -880,7 +880,7 @@ def test_deselecting_hides_the_files_list(panel: GitPanel, tmp_path: Path) -> No
     vcs.init(folder)
     panel.set_project(folder)
     panel.graph.select_row(0)
-    panel.set_commit_files(panel.graph.selected_sha(), [FileDiff(path="Notes.txt", change_type="added", diff_text="")])
+    panel.set_commit_files(panel.graph.selected_sha(), [FileDiff(path="notes.md", change_type="added", diff_text="")])
 
     panel._on_graph_selection_changed("")
 
@@ -896,10 +896,10 @@ def test_set_commit_files_populates_the_list(panel: GitPanel, tmp_path: Path) ->
     panel.graph.select_row(0)
     sha = panel.graph.selected_sha()
 
-    panel.set_commit_files(sha, [FileDiff(path="Notes.txt", change_type="added", diff_text="")])
+    panel.set_commit_files(sha, [FileDiff(path="notes.md", change_type="added", diff_text="")])
 
     assert panel.commit_files_list.count() == 1
-    assert panel.commit_files_list.item(0).text() == "+  Notes.txt"
+    assert panel.commit_files_list.item(0).text() == "+  notes.md"
     assert panel.commit_files_label.text() == "Files Changed (1)"
 
 
@@ -941,7 +941,7 @@ def test_dragging_the_history_splitter_up_grows_the_files_changed_list(
     panel.show()
     panel.graph.select_row(0)
     sha = panel.graph.selected_sha()
-    panel.set_commit_files(sha, [FileDiff(path="Notes.txt", change_type="added", diff_text="")])
+    panel.set_commit_files(sha, [FileDiff(path="notes.md", change_type="added", diff_text="")])
     QApplication.processEvents()
     before = panel.commit_files_list.height()
     graph_size, files_size = panel._history_splitter.sizes()
@@ -964,7 +964,7 @@ def test_set_commit_files_ignores_a_stale_fetch_for_a_no_longer_selected_commit(
     panel.set_project(folder)
     panel.graph.select_row(0)  # selects whatever is now the newest (the stamp)
 
-    panel.set_commit_files("some-other-stale-sha", [FileDiff(path="Notes.txt", change_type="added", diff_text="")])
+    panel.set_commit_files("some-other-stale-sha", [FileDiff(path="notes.md", change_type="added", diff_text="")])
 
     assert panel.commit_files_list.count() == 0
 
@@ -977,13 +977,13 @@ def test_clicking_a_commit_file_emits_commit_diff_requested(panel: GitPanel, tmp
     panel.set_project(folder)
     panel.graph.select_row(0)
     sha = panel.graph.selected_sha()
-    panel.set_commit_files(sha, [FileDiff(path="Notes.txt", change_type="added", diff_text="")])
+    panel.set_commit_files(sha, [FileDiff(path="notes.md", change_type="added", diff_text="")])
     emitted = []
     panel.commit_diff_requested.connect(lambda s, p: emitted.append((s, p)))
 
     panel.commit_files_list.itemClicked.emit(panel.commit_files_list.item(0))
 
-    assert emitted == [(sha, "Notes.txt")]
+    assert emitted == [(sha, "notes.md")]
 
 
 def test_commit_file_context_menu_view_diff_emits_commit_diff_requested(panel: GitPanel, tmp_path: Path) -> None:
@@ -994,14 +994,14 @@ def test_commit_file_context_menu_view_diff_emits_commit_diff_requested(panel: G
     panel.set_project(folder)
     panel.graph.select_row(0)
     sha = panel.graph.selected_sha()
-    panel.set_commit_files(sha, [FileDiff(path="Notes.txt", change_type="added", diff_text="")])
+    panel.set_commit_files(sha, [FileDiff(path="notes.md", change_type="added", diff_text="")])
     emitted = []
     panel.commit_diff_requested.connect(lambda s, p: emitted.append((s, p)))
 
     menu = panel._build_commit_file_context_menu(panel.commit_files_list.item(0))
     _trigger_action(menu, "View Diff")
 
-    assert emitted == [(sha, "Notes.txt")]
+    assert emitted == [(sha, "notes.md")]
 
 
 def test_commit_file_context_menu_open_file_emits_commit_open_file_requested(
@@ -1014,14 +1014,14 @@ def test_commit_file_context_menu_open_file_emits_commit_open_file_requested(
     panel.set_project(folder)
     panel.graph.select_row(0)
     sha = panel.graph.selected_sha()
-    panel.set_commit_files(sha, [FileDiff(path="Notes.txt", change_type="added", diff_text="")])
+    panel.set_commit_files(sha, [FileDiff(path="notes.md", change_type="added", diff_text="")])
     emitted = []
     panel.commit_open_file_requested.connect(lambda s, p: emitted.append((s, p)))
 
     menu = panel._build_commit_file_context_menu(panel.commit_files_list.item(0))
     _trigger_action(menu, "Open File")
 
-    assert emitted == [(sha, "Notes.txt")]
+    assert emitted == [(sha, "notes.md")]
 
 
 def test_history_graph_widens_to_fill_a_wider_sidebar(panel: GitPanel, tmp_path: Path) -> None:
@@ -1040,3 +1040,20 @@ def test_history_graph_widens_to_fill_a_wider_sidebar(panel: GitPanel, tmp_path:
 
     assert panel.graph.width() > narrow_width
     assert panel.graph.width() >= panel._graph_scroll.viewport().width()
+
+
+def test_staged_and_unstaged_changes_are_collapsible_sub_sections(qtbot) -> None:
+    from in_reach_ide.collapsible_section import CollapsibleSection
+
+    panel = GitPanel()
+    qtbot.addWidget(panel)
+    panel.show()
+
+    for section, button, lst in (
+        (panel.staged_section, panel.unstage_all_button, panel.staged_list),
+        (panel.unstaged_section, panel.stage_all_button, panel.changes_list),
+    ):
+        assert isinstance(section, CollapsibleSection) and button.parent() is section
+        assert panel.changes_section.body.isAncestorOf(section)
+        section.set_expanded(False)
+        assert lst.isHidden() and not button.isHidden()

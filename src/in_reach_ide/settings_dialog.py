@@ -1,17 +1,22 @@
 """The settings cog's own popout: a modal dialog, centered on screen at half its size, holding
-System/UI (both stubbed -- no settings live there yet) and Theme (a live theme picker, the same
-one the first-run dialog uses) tabs.
+System (stubbed -- no settings live there yet), UI (how files open in tabs, and whether a build asks which env to use
+-- :mod:`in_reach_ide.ide_settings`, saved as soon as they change) and Theme (a live theme picker, the same one the
+first-run dialog uses) tabs.
 """
 
 from __future__ import annotations
 
+from pathlib import Path
 from typing import Callable
 
 from PyQt6.QtCore import Qt
 from PyQt6.QtGui import QShowEvent
 from PyQt6.QtWidgets import (
     QApplication,
+    QCheckBox,
+    QComboBox,
     QDialog,
+    QFormLayout,
     QLabel,
     QPushButton,
     QTabWidget,
@@ -19,6 +24,7 @@ from PyQt6.QtWidgets import (
     QWidget,
 )
 
+from in_reach_ide import ide_settings
 from in_reach_ide.theme import Theme
 from in_reach_ide.theme_picker import ThemePickerRow
 
@@ -43,6 +49,7 @@ class SettingsDialog(QDialog):
         parent: QWidget | None = None,
         *,
         on_theme_changed: Callable[[Theme], None] | None = None,
+        settings_env: Path | None = None,
     ) -> None:
         super().__init__(parent)
         self.setWindowTitle("Settings")
@@ -54,7 +61,7 @@ class SettingsDialog(QDialog):
 
         self.tabs = QTabWidget()
         self.system_tab = _stub_tab(_SYSTEM_PLACEHOLDER_TEXT)
-        self.ui_tab = _stub_tab(_UI_PLACEHOLDER_TEXT)
+        self.ui_tab = _stub_tab(_UI_PLACEHOLDER_TEXT) if settings_env is None else self._build_ui_tab(settings_env)
         self.theme_tab = _build_theme_tab(on_theme_changed)
         self.tabs.addTab(self.system_tab, "System")
         self.tabs.addTab(self.ui_tab, "UI")
@@ -65,6 +72,23 @@ class SettingsDialog(QDialog):
         close_button.setCursor(Qt.CursorShape.PointingHandCursor)
         close_button.clicked.connect(self.accept)
         layout.addWidget(close_button, 0, Qt.AlignmentFlag.AlignRight)
+
+    def _build_ui_tab(self, settings_env: Path) -> QWidget:
+        tab = QWidget()
+        form = QFormLayout(tab)
+        self.tab_mode_combo = QComboBox()
+        for mode, text in ide_settings.TAB_MODES.items():
+            self.tab_mode_combo.addItem(text, mode)
+        self.tab_mode_combo.setCurrentIndex(self.tab_mode_combo.findData(ide_settings.tab_mode(settings_env)))
+        self.tab_mode_combo.currentIndexChanged.connect(
+            lambda _i: ide_settings.set_tab_mode(settings_env, self.tab_mode_combo.currentData())
+        )
+        form.addRow("Opening a file:", self.tab_mode_combo)
+        self.ask_env_check = QCheckBox("Ask which env to build with, when a project has more than one")
+        self.ask_env_check.setChecked(ide_settings.ask_env_on_build(settings_env))
+        self.ask_env_check.toggled.connect(lambda checked: ide_settings.set_ask_env_on_build(settings_env, checked))
+        form.addRow("Building:", self.ask_env_check)
+        return tab
 
     def showEvent(self, event: QShowEvent) -> None:
         super().showEvent(event)

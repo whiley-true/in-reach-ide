@@ -36,7 +36,7 @@ def _single_file_project(tmp_path: Path, name: str = "abcd1234") -> Path:
     (folder / "settings").mkdir(parents=True)
     (folder / "settings" / "settings.json").write_text(json.dumps({"meta": {"title": "T"}}), encoding="utf-8")
     (folder / "script").mkdir()
-    (folder / "script" / "output.txt").write_text("global.number[0] = 1\n", encoding="utf-8")
+    (folder / "script" / "output.mgl").write_text("global.number[0] = 1\n", encoding="utf-8")
     return folder
 
 
@@ -160,7 +160,7 @@ def test_a_single_file_builds_positioned_messages_are_about_output_txt() -> None
 
     error, notice = problems_from_build(folder, result, linked=False)
 
-    assert error.path == folder / "script" / "output.txt" and error.line == 3
+    assert error.path == folder / "script" / "output.mgl" and error.line == 3
     assert notice.path is None and notice.severity == "notice"
 
 
@@ -195,7 +195,8 @@ def test_the_scripts_view_shows_a_script_projects_modules_blocks_budget_and_fusi
 
     assert panel.linked_box.isVisible() and panel.fusion_box.isVisible() and not panel.single_box.isVisible()
     assert panel.envs_box.isVisible() and panel.budget_box.isVisible()
-    assert panel.status_label.text() == "Checks cleanly."
+    assert panel.modules_section.isVisible() and panel.blocks_section.isVisible()
+    assert panel.status_label.text() == "" and not panel.status_label.isVisible()  # nothing wrong: nothing said
     assert [panel.modules_tree.topLevelItem(i).text(0) for i in range(2)] == ["hill_score 1.0.0", "hill_buff 0.0.0"]
     assert panel.modules_tree.topLevelItem(0).text(1) == "HILL_PASS"
     assert [panel.blocks_tree.topLevelItem(i).text(0) for i in range(3)] == ["SETUP", "HILL_PASS", "WIN_CHECK"]
@@ -205,7 +206,7 @@ def test_the_scripts_view_shows_a_script_projects_modules_blocks_budget_and_fusi
     assert "HILL_PASS: hill_score.score + hill_buff.buff" in panel.fusion_tree.topLevelItem(0).text(0)
 
 
-def test_the_envs_section_lists_each_env_with_its_flags_and_constants_and_marks_the_active_one(qtbot, tmp_path: Path) -> None:
+def test_the_envs_list_is_one_column_of_names_with_a_star_left_of_the_active_one(qtbot, tmp_path: Path) -> None:
     folder = _with_release(_linked_project(tmp_path))
     script_preprocess.set_active_env(folder, "release")
     panel = ScriptsPanel()
@@ -213,12 +214,39 @@ def test_the_envs_section_lists_each_env_with_its_flags_and_constants_and_marks_
 
     panel.show_link(folder, link(folder, write=False), api.envs(folder))
 
-    assert panel.env_names() == ["dev", "release", None]
-    rows = [[panel.envs_tree.topLevelItem(i).text(c) for c in range(3)] for i in range(3)]
-    assert rows[0] == ["dev", "DEV", "SCORE_TO_WIN=5"]
-    assert rows[1] == ["release  (active)", "RELEASE", "SCORE_TO_WIN=50"]
-    assert rows[2][0] == "(no env)"
-    assert panel.envs_tree.topLevelItem(1).font(0).bold() and not panel.envs_tree.topLevelItem(0).font(0).bold()
+    assert panel.env_names() == ["dev", "release"]  # no "(no env)" row
+    assert panel.envs_tree.columnCount() == 1 and panel.envs_tree.isHeaderHidden()
+    assert [panel.envs_tree.topLevelItem(i).text(0) for i in range(2)] == ["dev", "release"]  # no star in it
+    assert panel.active_env_row() == 1
+    assert not any(panel.envs_tree.topLevelItem(i).font(0).bold() for i in range(2))
+    assert "FLAGS=RELEASE" in panel.envs_tree.topLevelItem(1).toolTip(0)
+    assert "SCORE_TO_WIN=50" in panel.envs_tree.topLevelItem(1).toolTip(0)
+
+
+def test_the_star_is_the_rows_icon_on_its_left(qtbot, tmp_path: Path) -> None:
+    folder = _with_release(_linked_project(tmp_path))
+    script_preprocess.set_active_env(folder, "release")
+    panel = ScriptsPanel()
+    qtbot.addWidget(panel)
+    panel.show_link(folder, link(folder, write=False), api.envs(folder))
+
+    def drawn(row: int) -> bool:
+        image = panel.envs_tree.topLevelItem(row).icon(0).pixmap(14, 14).toImage()
+        return any(image.pixelColor(x, y).alpha() for x in range(image.width()) for y in range(image.height()))
+
+    active = panel.active_env_row()
+    assert drawn(active) and not any(drawn(row) for row in range(panel.envs_tree.topLevelItemCount()) if row != active)
+
+
+def test_with_no_env_chosen_no_row_has_the_star(qtbot, tmp_path: Path) -> None:
+    folder = _linked_project(tmp_path)
+    script_preprocess.set_active_env(folder, None)  # an older project can still have none
+    panel = ScriptsPanel()
+    qtbot.addWidget(panel)
+
+    panel.show_link(folder, link(folder, write=False), api.envs(folder))
+
+    assert panel.active_env_row() is None
 
 
 def test_an_env_that_does_not_parse_says_why(qtbot, tmp_path: Path) -> None:
@@ -230,7 +258,7 @@ def test_an_env_that_does_not_parse_says_why(qtbot, tmp_path: Path) -> None:
     panel.show_link(folder, link(folder, write=False), api.envs(folder))
 
     row = panel.envs_tree.topLevelItem(panel.env_names().index("broken"))
-    assert row.text(1) == "invalid" and row.text(2).startswith("line 1:")
+    assert "doesn't parse: line 1:" in row.toolTip(0)
 
 
 def test_the_env_buttons_report_what_to_do_with_the_selected_env(qtbot, tmp_path: Path) -> None:
@@ -244,30 +272,38 @@ def test_the_env_buttons_report_what_to_do_with_the_selected_env(qtbot, tmp_path
         panel.env_use_button.click()
     with qtbot.waitSignal(panel.env_edit_requested) as edited:
         panel.env_edit_button.click()
+    with qtbot.waitSignal(panel.env_copy_requested) as copied:
+        panel.env_copy_button.click()
     with qtbot.waitSignal(panel.env_delete_requested) as deleted:
         panel.env_delete_button.click()
     with qtbot.waitSignal(panel.env_new_requested):
         panel.env_new_button.click()
 
-    assert used.args == ["release"] and edited.args == ["release"] and deleted.args == ["release"]
+    assert used.args == edited.args == copied.args == deleted.args == ["release"]
 
 
-def test_the_no_env_row_can_be_used_but_not_edited_or_deleted(qtbot, tmp_path: Path) -> None:
+def test_copy_sits_between_edit_and_new(qtbot) -> None:
+    panel = ScriptsPanel()
+    qtbot.addWidget(panel)
+    buttons = [panel.env_use_button, panel.env_edit_button, panel.env_copy_button, panel.env_new_button, panel.env_delete_button]
+    positions = [panel.env_use_button.parentWidget().layout().indexOf(b) for b in buttons]
+    assert positions == sorted(positions) or all(p == -1 for p in positions)
+    labels = [b.text() for b in buttons]
+    assert labels == ["Use", "Edit", "Copy", "New...", "Delete"]
+
+
+def test_the_env_buttons_need_a_selected_env(qtbot, tmp_path: Path) -> None:
     folder = _linked_project(tmp_path)
     panel = ScriptsPanel()
     qtbot.addWidget(panel)
     panel.show_link(folder, link(folder, write=False), api.envs(folder))
 
-    panel.select_env(None)
-
-    assert panel.env_use_button.isEnabled()
-    assert not panel.env_edit_button.isEnabled() and not panel.env_delete_button.isEnabled()
-    with qtbot.waitSignal(panel.env_selected) as used:
-        panel.env_use_button.click()
-    assert used.args == [None]
+    assert not any(b.isEnabled() for b in (panel.env_use_button, panel.env_edit_button, panel.env_copy_button, panel.env_delete_button))
+    panel.select_env("dev")
+    assert all(b.isEnabled() for b in (panel.env_use_button, panel.env_edit_button, panel.env_copy_button, panel.env_delete_button))
 
 
-def test_double_clicking_an_env_edits_it_and_the_no_env_row_uses_none(qtbot, tmp_path: Path) -> None:
+def test_double_clicking_an_env_edits_it(qtbot, tmp_path: Path) -> None:
     folder = _linked_project(tmp_path)
     panel = ScriptsPanel()
     qtbot.addWidget(panel)
@@ -275,10 +311,8 @@ def test_double_clicking_an_env_edits_it_and_the_no_env_row_uses_none(qtbot, tmp
 
     with qtbot.waitSignal(panel.env_edit_requested) as edited:
         panel.envs_tree.itemActivated.emit(panel.envs_tree.topLevelItem(0), 0)
-    with qtbot.waitSignal(panel.env_selected) as used:
-        panel.envs_tree.itemActivated.emit(panel.envs_tree.topLevelItem(1), 0)
 
-    assert edited.args == ["dev"] and used.args == [None]
+    assert edited.args == ["dev"]
 
 
 def test_a_module_row_opens_its_first_file(qtbot, tmp_path: Path) -> None:
@@ -323,7 +357,7 @@ def test_an_empty_link_map_and_nothing_to_fuse_say_so(qtbot, tmp_path: Path) -> 
 
 def test_a_single_file_shows_its_state_envs_budget_and_the_convert_button(qtbot, tmp_path: Path) -> None:
     folder = _single_file_project(tmp_path)
-    (folder / "script" / "output.txt").write_text("-- @number g_score\ng_score = 1\n", encoding="utf-8")
+    (folder / "script" / "output.mgl").write_text("global.number[0] = 1\n", encoding="utf-8")  # its own slot, counted
     panel = ScriptsPanel()
     qtbot.addWidget(panel)
     panel.show()
@@ -332,18 +366,18 @@ def test_a_single_file_shows_its_state_envs_budget_and_the_convert_button(qtbot,
 
     assert panel.single_box.isVisible() and panel.envs_box.isVisible() and panel.budget_box.isVisible()
     assert not panel.linked_box.isVisible() and not panel.fusion_box.isVisible()
-    assert panel.status_label.text() == "Checks cleanly."
+    assert not panel.modules_section.isVisible() and not panel.blocks_section.isVisible()
+    assert not panel.status_label.isVisible()
     assert panel.budget_tree.topLevelItem(0).text(0) == "global.number"
     assert "experimental" in panel.convert_button.text().lower()
     with qtbot.waitSignal(panel.convert_requested):
         panel.convert_button.click()
-    with qtbot.waitSignal(panel.check_requested):
-        panel.single_check_button.click()
+    assert not hasattr(panel, "single_check_button")  # checked all the time instead -- see the redesign tests
 
 
 def test_a_single_file_with_nothing_declared_says_so_in_the_budget(qtbot, tmp_path: Path) -> None:
     folder = _single_file_project(tmp_path)
-    (folder / "script" / "output.txt").write_text("game.end_round()\n", encoding="utf-8")  # no slot used at all
+    (folder / "script" / "output.mgl").write_text("game.end_round()\n", encoding="utf-8")  # no slot used at all
     panel = ScriptsPanel()
     qtbot.addWidget(panel)
 
@@ -379,12 +413,12 @@ def test_opening_a_single_file_project_shows_the_single_file_view(project_window
 
 def test_a_single_files_problems_are_listed_when_it_opens(project_window, tmp_path: Path) -> None:
     folder = _single_file_project(tmp_path)
-    (folder / "script" / "output.txt").write_text("-- @number a\n-- @number a\n", encoding="utf-8")
+    (folder / "script" / "output.mgl").write_text("declare global.number[0]\ndeclare global.number[0]\n", encoding="utf-8")
 
     project_window._on_project_opened(folder)
 
     [problem] = project_window.bottom_panel.problems_panel.problems()
-    assert (problem.code, problem.path, problem.line) == ("IR006", folder / "script" / "output.txt", 2)
+    assert (problem.code, problem.path, problem.line) == ("IR006", folder / "script" / "output.mgl", 2)
 
 
 def test_saving_a_broken_module_lists_the_problem_and_counts_it_in_the_tab(project_window, tmp_path: Path) -> None:
@@ -432,7 +466,7 @@ def test_switching_env_relinks(project_window, tmp_path: Path) -> None:
 
     assert script_preprocess.active_env_name(folder) == "release"
     panel = project_window.scripts_panel
-    assert panel.envs_tree.topLevelItem(panel.env_names().index("release")).text(0) == "release  (active)"
+    assert panel.active_env_row() == panel.env_names().index("release")
 
 
 def test_check_script_project_shows_the_problems_tab_when_there_are_some(project_window, tmp_path: Path) -> None:
@@ -448,7 +482,7 @@ def test_check_script_project_shows_the_problems_tab_when_there_are_some(project
 def test_check_script_on_a_single_file_project_lists_its_problems(project_window, tmp_path: Path) -> None:
     folder = _single_file_project(tmp_path)
     project_window._on_project_opened(folder)
-    (folder / "script" / "output.txt").write_text("x = true\n", encoding="utf-8")
+    (folder / "script" / "output.mgl").write_text("x = true\n", encoding="utf-8")
     project_window.bottom_panel.setCurrentIndex(0)
 
     project_window.check_script_project()
@@ -514,7 +548,7 @@ def test_backing_up_before_converting_copies_script_first_and_says_where(project
 
     [backup] = reported
     assert is_linked(folder) and backup.parent == tmp_path / ".in-reach" / "backups" / folder.name
-    assert (backup / "output.txt").read_text(encoding="utf-8") == "global.number[0] = 1\n"
+    assert (backup / "output.mgl").read_text(encoding="utf-8") == "global.number[0] = 1\n"
     assert not (backup / "project.toml").exists()  # copied before converting
 
 
@@ -597,7 +631,7 @@ def test_a_single_file_projects_failed_build_points_at_output_txt(project_window
     )
 
     [problem] = project_window.bottom_panel.problems_panel.problems()
-    assert problem.path == folder / "script" / "output.txt" and problem.line == 2
+    assert problem.path == folder / "script" / "output.mgl" and problem.line == 2
 
 
 def test_the_new_commands_are_in_the_palette_and_the_view_menu(project_window) -> None:
@@ -653,17 +687,27 @@ def test_view_decompiled_opens_the_decompiled_script_read_only(project_window, t
     assert editor.path == decompiled and "for each player" in editor.toPlainText()
 
 
-def test_the_scripts_view_button_and_palette_entry_open_the_decompiled_view(project_window, tmp_path: Path, monkeypatch) -> None:
-    project_window._on_project_opened(_single_file_project(tmp_path))
-    calls = []
-    project_window.scripts_panel.view_decompiled_requested.disconnect()
-    project_window.scripts_panel.view_decompiled_requested.connect(lambda: calls.append("button"))
+def test_open_script_opens_a_single_files_output_txt_to_edit(project_window, tmp_path: Path) -> None:
+    folder = _single_file_project(tmp_path)
+    project_window._on_project_opened(folder)
 
-    assert not project_window.scripts_panel.decompiled_button.isHidden()
-    project_window.scripts_panel.decompiled_button.click()
+    assert project_window.scripts_panel.open_script_button.text() == "Open Script"
+    project_window.scripts_panel.open_script_button.click()
 
-    assert calls == ["button"]
-    assert "View Decompiled" in {c.label for c in project_window.build_command_palette_commands()}
+    editor = project_window.main_panel.active_pane.currentWidget()
+    assert editor.path == folder / "script" / "output.mgl" and not editor.isReadOnly()
+    labels = {c.label for c in project_window.build_command_palette_commands()}
+    assert {"Open Script", "View Decompiled"} <= labels  # the read-only decompiled view is still in the palette
+
+
+def test_open_script_opens_a_script_projects_first_block(project_window, tmp_path: Path) -> None:
+    folder = _linked_project(tmp_path)
+    project_window._on_project_opened(folder)
+
+    project_window.open_script()
+
+    editor = project_window.main_panel.active_pane.currentWidget()
+    assert editor.path == folder / "script" / "blocks" / "setup.mgl" and not editor.isReadOnly()
 
 
 def test_the_scripts_view_paints_no_background_of_its_own_over_the_sidebar_border(qtbot) -> None:
@@ -862,3 +906,56 @@ def test_the_palette_offers_to_enable_what_is_off_and_disable_what_is_on(project
     assert [c.label for c in commands["Disable Script Module"].children] == ["hill_score"]
     commands["Enable Script Module"].children[0].action()
     assert "enabled" not in _toml(folder)
+
+
+def test_the_single_file_help_is_one_usage_example_per_line_and_every_example_is_valid(qtbot, tmp_path: Path) -> None:
+    from in_reach.app.rvt.megalo_ast.annotations import parse_annotations
+    from in_reach_ide.scripts_panel import SINGLE_FILE_EXAMPLES
+
+    panel = ScriptsPanel()
+    qtbot.addWidget(panel)
+    text = panel.single_label.text()
+
+    import html
+
+    assert all(html.escape(meaning) in text for _code, meaning in SINGLE_FILE_EXAMPLES)
+    annotations = [code for code, _meaning in SINGLE_FILE_EXAMPLES if code.startswith("-- @") and "@if" not in code]
+    parsed = parse_annotations("\n".join(annotations))
+    assert parsed.diagnostics == [] and len(parsed.items) == len(annotations)
+    # ... and every example is something a single file may write: nothing that picks a slot for it.
+    folder = _single_file_project(tmp_path)
+    (folder / "script" / "output.mgl").write_text(
+        "\n".join(code for code, _meaning in SINGLE_FILE_EXAMPLES if "${" not in code and "@if" not in code) + "\n",
+        encoding="utf-8",
+    )
+    assert "project-only" not in [d.code for d in link(folder, write=False).diagnostics]
+
+
+def test_the_single_file_help_points_at_rvts_syntax_then_lists_what_it_adds(qtbot) -> None:
+    import in_reach_ide.scripts_panel as scripts_panel
+
+    panel = ScriptsPanel()
+    qtbot.addWidget(panel)
+    text = panel.single_label.text()
+
+    assert text.startswith("Use the button above to edit the Megalo Script. It has the same syntax as ")
+    assert "href='https://davidjcobb.github.io/ReachVariantEditor/index.html'" in text
+    assert "with the following additional features:" in text and panel.single_label.openExternalLinks()
+    assert not hasattr(scripts_panel, "HELP_PLACEHOLDERS") and "Lorem" not in text
+    assert scripts_panel.SINGLE_FILE_EXAMPLES[0][0].startswith("-- @doc")
+
+
+def test_every_part_of_the_scripts_view_is_a_collapsible_section(qtbot, tmp_path: Path) -> None:
+    from in_reach_ide.collapsible_section import CollapsibleSection
+
+    panel = ScriptsPanel()
+    qtbot.addWidget(panel)
+    panel.show()
+    folder = _single_file_project(tmp_path)
+    panel.show_single(folder, link(folder, write=False), api.envs(folder))
+    sections = [panel.envs_box, panel.script_section, panel.modules_section, panel.blocks_section, panel.budget_box, panel.fusion_box]
+
+    assert all(isinstance(section, CollapsibleSection) for section in sections)
+    assert [section._toggle.text() for section in sections] == ["Envs", "Script", "Modules", "Blocks", "Budget", "Fusion"]
+    panel.script_section.set_expanded(False)
+    assert not panel.open_script_button.isVisible()

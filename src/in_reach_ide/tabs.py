@@ -157,7 +157,7 @@ class _DragTabBar(QTabBar):
     the mouse leaves the tab bar's own bounds while dragging a tab -- reordering *within* the bar
     is left entirely to Qt's own built-in movable-tab handling (``setMovable(True)``), so any drag
     that stays inside the bar falls through to the base implementation untouched. Double-clicking
-    the bar's own empty space (past the last tab) creates a new placeholder tab."""
+    the bar's own empty space (past the last tab) opens :meth:`TabPane.show_empty_bar_menu` -- what to open there."""
 
     def __init__(self, pane: "TabPane") -> None:
         super().__init__(pane)
@@ -169,14 +169,15 @@ class _DragTabBar(QTabBar):
             self._drag_start_index = self.tabAt(event.position().toPoint())
         super().mousePressEvent(event)
 
-    def mouseDoubleClickEvent(self, event: QMouseEvent) -> None:
-        if event.button() == Qt.MouseButton.LeftButton and self.tabAt(event.position().toPoint()) < 0:
-            # Double-clicked the bar's own empty tail past the last tab, rather than any tab
-            # itself -- a single click there is left alone since it's also the first half of every
-            # ordinary drag/press interaction with the bar.
-            self._pane._area.new_tab_in(self._pane)
-            return
-        super().mouseDoubleClickEvent(event)
+    def mouseReleaseEvent(self, event: QMouseEvent) -> None:
+        pos = event.position().toPoint()
+        pressed_on_empty = self._drag_start_index is not None and self._drag_start_index < 0
+        self._drag_start_index = None
+        super().mouseReleaseEvent(event)
+        if event.button() == Qt.MouseButton.LeftButton and pressed_on_empty and self.tabAt(pos) < 0:
+            # A click on the bar's own empty tail past the last tab (pressed and released there -- not the end of a
+            # drag): what to open.
+            self._pane.show_empty_bar_menu(self.mapToGlobal(pos))
 
     def mouseMoveEvent(self, event: QMouseEvent) -> None:
         index = self._drag_start_index
@@ -190,10 +191,6 @@ class _DragTabBar(QTabBar):
             self._start_drag(index)
             return
         super().mouseMoveEvent(event)
-
-    def mouseReleaseEvent(self, event: QMouseEvent) -> None:
-        self._drag_start_index = None
-        super().mouseReleaseEvent(event)
 
     def _start_drag(self, index: int) -> None:
         mime = QMimeData()
@@ -484,6 +481,18 @@ class TabPane(QTabWidget):
         )
         return Path(chosen) if chosen else None
 
+    def _confirm_save_with_errors(self, path: Path, errors: int) -> bool:
+        """Whether to save ``path`` although it has ``errors`` problems -- its own method as a test seam."""
+        answer = QMessageBox.warning(
+            self,
+            "Save with errors?",
+            f"{path.name} has {errors} error{'s' if errors != 1 else ''} (see the Problems tab). Save it anyway?\n\n"
+            "It can be saved, but it can't be built until they're fixed.",
+            QMessageBox.StandardButton.Save | QMessageBox.StandardButton.Cancel,
+            QMessageBox.StandardButton.Cancel,
+        )
+        return answer == QMessageBox.StandardButton.Save
+
     def _save_tab(self, index: int) -> bool:
         widget = self.widget(index)
         if not isinstance(widget, TextEditorWidget):
@@ -505,6 +514,12 @@ class TabPane(QTabWidget):
         schema_error = schema_check.validate_before_save(path, text)
         if schema_error is not None:
             QMessageBox.critical(self, "in-reach", f"Couldn't save {path.name}:\n{schema_error}")
+            return False
+        # A script with errors can still be saved (it just can't be built): the user is told first.
+        if self._area.before_save is not None:
+            self._area.before_save(widget)
+        errors = widget.problem_error_count()
+        if errors and not self._confirm_save_with_errors(path, errors):
             return False
         try:
             path.write_text(text, encoding="utf-8")
@@ -606,6 +621,7 @@ class TabPane(QTabWidget):
             generated = is_generated_file(path)
             editor.setReadOnly(generated)
             _connect_editor_signals(editor)
+            editor.refresh_problem_marks()
             # PROMPT.md: "they have a padlock symbol in the tab" -- a generated file's read-only
             # status never changes for the tab's own lifetime, unlike the dirty-state icon on its
             # close button, so this is set once here rather than needing its own refresh hook.
@@ -766,6 +782,10 @@ class TabPane(QTabWidget):
         docstring)."""
         if self.count() == 0:
             return None
+        from in_reach_ide import ide_settings
+
+        if ide_settings.tab_mode(self._area.settings_env) == ide_settings.TABS_ALWAYS_NEW:
+            return None  # the Settings dialog's "Always open a new tab"
         index = self.currentIndex()
         widget = self.widget(index)
         if isinstance(widget, WelcomeTab):
@@ -957,6 +977,22 @@ class TabPane(QTabWidget):
 
     # -- context menu --------------------------------------------------------------------------
 
+    def empty_bar_menu(self) -> QMenu:
+        """What clicking the tab bar's empty space offers: :attr:`MainPanelArea.empty_bar_actions` (the window's -- the
+        notepad, the script, the documentation), or, with none set, just "New File"."""
+        menu = QMenu(self)
+        actions = self._area.empty_bar_actions() if self._area.empty_bar_actions is not None else None
+        if actions is None:
+            menu.addAction("New File", lambda: self._area.new_tab_in(self))
+            return menu
+        for label, action in actions:
+            item = menu.addAction(label, action) if action is not None else menu.addAction(label)
+            item.setEnabled(action is not None)
+        return menu
+
+    def show_empty_bar_menu(self, global_pos: QPoint) -> None:
+        self.empty_bar_menu().exec(global_pos)
+
     def _show_tab_context_menu(self, pos: QPoint) -> None:
         index = self.tabBar().tabAt(pos)
         if index < 0:
@@ -973,6 +1009,9 @@ class TabPane(QTabWidget):
         menu.addAction(
             f"Save\t{_SHORTCUT_HINT_SAVE}", lambda: self._save_tab(index)
         ).setEnabled(isinstance(widget, TextEditorWidget))
+        if isinstance(widget, TextEditorWidget) and has_path and state.path.suffix.lower() == ".md":
+            # A Markdown file being edited (a README): its rendered preview, beside it -- the preview button's own action.
+            menu.addAction("Open Preview", lambda: self._open_preview_of(index)).setEnabled(self.group is not None)
         menu.addSeparator()
 
         menu.addAction(f"Close\t{_SHORTCUT_HINT_CLOSE}", lambda: self._maybe_close(index))
@@ -1008,6 +1047,10 @@ class TabPane(QTabWidget):
         menu.addAction("Move to Window", lambda: self._area.move_tab_to_new_window(self, index))
 
         menu.exec(self.tabBar().mapToGlobal(pos))
+
+    def _open_preview_of(self, index: int) -> None:
+        self.setCurrentIndex(index)
+        self._area.preview_split_from(self)
 
     # -- drag/drop between panes ---------------------------------------------------------------
 
@@ -1184,6 +1227,7 @@ class MainPanelArea(QWidget):
         project_title: Callable[[], str] | None = None,
         on_cursor_info: Callable[["TabPane", StatusBar], None] | None = None,
         on_text_edited: Callable[[TextEditorWidget], None] | None = None,
+        before_save: Callable[[TextEditorWidget], None] | None = None,
     ) -> None:
         super().__init__(parent)
         self.root_dir = root_dir or Path.cwd()
@@ -1194,6 +1238,13 @@ class MainPanelArea(QWidget):
         #: Called with an editor whenever its text changes (typing, not only saving) -- how the window checks a script
         #: as it is typed.
         self.on_text_edited = on_text_edited
+        #: Called with an editor just before it's saved -- how the window brings its problems up to date first.
+        self.before_save = before_save
+        #: The ``.env`` the IDE's own settings live in (:mod:`in_reach_ide.ide_settings`) -- set by the window.
+        self.settings_env: Path | None = None
+        #: ``() -> [(label, action or None), ...]`` -- what clicking a tab bar's empty space offers (``None`` action:
+        #: shown disabled). Set by the window; without it, the menu offers a new file.
+        self.empty_bar_actions: Callable[[], list[tuple[str, Callable[[], None] | None]]] | None = None
         #: PROMPT.md: "the top of the popout window should be called the gametype name (so that if
         #: multiple projects with multiple popouts are open it doesnt get confusing)" -- injectable
         #: (MainWindow passes the active project's own title, see :meth:`move_tab_to_new_window`),

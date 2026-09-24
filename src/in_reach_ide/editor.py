@@ -12,7 +12,7 @@ Adds, on top of the base ``QPlainTextEdit`` (PROMPT.md, across two passes):
   specifically) the live JSON structural path to wherever the cursor currently sits (see
   :mod:`in_reach_ide.json_breadcrumb`).
 - Megalo syntax highlighting (see :mod:`in_reach_ide.megalo_highlighter`) for a project's ``.mgl`` files,
-  ``script/output.txt`` and ``build/Compiled.txt``.
+  ``script/output.mgl`` and ``build/Compiled.txt``.
 - JSON syntax highlighting (see :mod:`in_reach_ide.json_highlighter`), attached only when the
   file's own extension is ``.json``.
 - A minimap pinned along the right edge, next to the vertical scrollbar (PROMPT.md: "a live code
@@ -62,6 +62,7 @@ from PyQt6.QtGui import (
     QPainter,
     QPainterPath,
     QPalette,
+    QPen,
     QTextCharFormat,
     QTextCursor,
     QTextDocument,
@@ -80,8 +81,8 @@ from PyQt6.QtWidgets import (
 )
 
 from in_reach_ide import indent_settings
-from in_reach_ide import indent_state, schema_check, word_wrap
-from in_reach_ide.code_folding import compute_fold_ranges
+from in_reach_ide import indent_guides, indent_state, schema_check, word_wrap
+from in_reach_ide.code_folding import compute_fold_ranges, compute_megalo_fold_ranges
 from in_reach_ide.find_replace import FindReplaceBar
 from in_reach_ide.json_breadcrumb import json_breadcrumb_path
 from in_reach_ide.json_highlighter import JsonSyntaxHighlighter
@@ -100,10 +101,23 @@ _MINIMAP_WIDTH = 72
 #: Fixed error red -- same reasoning as json_highlighter.py's own fixed token palette: a schema
 #: error reads as unambiguously wrong regardless of which of this app's themes is active.
 _ERROR_COLOR = "#f14c4c"
+#: script/DOCSTRINGS.md, and the where-line in-reach writes under each docstring's title there.
+_DOCSTRINGS_FILENAME = "DOCSTRINGS.md"
+_DOCSTRING_WHERE = re.compile(r"^<!--\s*\S+:\d+\s*-->$")
+_DOCSTRING_WHERE_WARNING = (
+    "Where this docstring is in the script -- in-reach keeps it up to date (it follows each save of a .mgl file), so "
+    "it can't be edited here."
+)
+#: How strongly the other copies of the selected text are tinted (out of 255) -- light, so the selection itself stands
+#: out from them.
+_MATCH_HIGHLIGHT_ALPHA = 60
 #: Extra width added to every space, as a fraction of the font's own space advance -- the app font is
 #: proportional, and its plain space is only a few pixels wide, so a run of indentation reads as one
 #: clump against the text next to it. Applied as :meth:`QFont.setWordSpacing`.
 _SPACE_EXTRA = 1.0
+#: How strongly indent guides are drawn over the text colour: an ordinary one, and the one around the cursor.
+_GUIDE_ALPHA = 45
+_ACTIVE_GUIDE_ALPHA = 150
 #: Alpha applied to the theme's own Highlight color for the "Go to Line" target-line background --
 #: same technique (and alpha, for visual consistency) as the minimap's own visible-viewport band in
 #: :meth:`_Minimap.paintEvent`, just applied to a single document line instead of a page range.
@@ -181,14 +195,39 @@ def set_megalo_hover_provider(provider) -> None:
     _megalo_hover_provider = provider
 
 
+#: Set by the window (:func:`set_problem_provider`): ``path -> [(line, column, message, severity), ...]`` -- the
+#: Problems tab's entries for that file (1-based; column 0: the whole line), what an editor underlines.
+_problem_provider = None
+_WARNING_COLOR = "#cca700"
+
+
+def set_problem_provider(provider) -> None:
+    """Sets (``None``: clears) what every editor asks for the problems to underline in its file."""
+    global _problem_provider
+    _problem_provider = provider
+
+
+#: Set by the window (:func:`set_completion_provider`): ``(path, line up to the cursor, whole text) -> (start column,
+#: completions)`` -- what a Megalo file's editor offers as it is typed.
+_completion_provider = None
+#: What typing asks for completions after: a word character, a ``.`` (a member) or an ``@`` (an annotation).
+_COMPLETION_TRIGGER = re.compile(r"[A-Za-z0-9_.@]")
+
+
+def set_completion_provider(provider) -> None:
+    """Sets (``None``: clears) what every Megalo editor asks for autocomplete."""
+    global _completion_provider
+    _completion_provider = provider
+
+
 def is_megalo_path(path: Path | None) -> bool:
-    """Whether ``path`` is Megalo script text: any ``.mgl`` file, or the ``output.txt`` a project's script lives in and the
+    """Whether ``path`` is Megalo script text: any ``.mgl`` file, or the ``output.mgl`` a project's script lives in and the
     ``Compiled.txt`` built from it."""
     if path is None:
         return False
     if path.suffix.lower() == ".mgl":
         return True
-    return path.name in ("output.txt", "Compiled.txt") and path.parent.name in ("script", "build")
+    return path.name in ("output.mgl", "Compiled.txt") and path.parent.name in ("script", "build")
 
 
 #: Files whose tab shows the status bar's Ln/Col and Spaces segments (besides Megalo scripts, see
@@ -472,6 +511,17 @@ class _PlainTextEditor(QPlainTextEdit):
         #: :meth:`_error_message_at` hovers against to show the red-underline tooltip (PROMPT.md:
         #: "it should be a window that appears when hovering on the red underlined text").
         self._error_spans: list[tuple[int, int, str]] = []
+        #: The Problems tab's entries for this file (see :meth:`refresh_problem_marks`): ``(line, column, message,
+        #: severity)``, placed against the text as it is whenever they're drawn.
+        self._problem_marks: list[tuple[int, int, str, str]] = []
+        #: The autocomplete list (made the first time there's something to offer) and where the word it would replace
+        #: begins.
+        self._completion_popup = None
+        self._completion_start = 0
+        #: ``(start, end)`` of every copy of the selected text, lightly highlighted (a Megalo file) -- and what "Convert
+        #: to Alias" would replace.
+        self._match_spans: list[tuple[int, int]] = []
+        self.selectionChanged.connect(self._update_selection_matches)
         #: Cached result of :meth:`_compute_protected_spans`, refreshed once per actual edit (see
         #: :meth:`_on_text_changed`) rather than recomputed on every call -- :meth:`_protected_spans`
         #: itself is now just a cheap accessor over this. Same reasoning/pattern as
@@ -484,6 +534,10 @@ class _PlainTextEditor(QPlainTextEdit):
         #: was re-parsing and re-walking its own JSON dozens of times per second just from normal
         #: mouse movement.
         self._protected_spans_cache: list[tuple[int, int, str]] = []
+        #: Each line's indentation depth and the document's indentation step (see in_reach_ide.indent_guides), kept up to
+        #: date by _on_text_changed so painting the indent guides never re-reads the whole document.
+        self._indent_unit = indent_guides.DEFAULT_UNIT
+        self._indent_depths: list[int] = []
         #: 0-based block number "Go to Line" last jumped to, if any -- cleared the moment the
         #: cursor moves to a *different* line (see :meth:`_maybe_clear_goto_highlight`), so it
         #: behaves like a one-shot "you are here" marker rather than a permanent current-line
@@ -503,6 +557,8 @@ class _PlainTextEditor(QPlainTextEdit):
         self.textChanged.connect(self._on_text_changed)
         self.cursorPositionChanged.connect(self._update_breadcrumb)
         self.cursorPositionChanged.connect(self._maybe_clear_goto_highlight)
+        # The active indent guide follows the cursor.
+        self.cursorPositionChanged.connect(self.viewport().update)
 
     def set_path(self, path: Path | None) -> None:
         """(Re-)points this editor at ``path`` -- e.g. "Save As" giving a previously-Untitled tab
@@ -601,6 +657,12 @@ class _PlainTextEditor(QPlainTextEdit):
         if event.matches(QKeySequence.StandardKey.Save):
             self.save_requested.emit()
             return
+        if self._completion_key(event):
+            return
+        self._key_press(event)
+        self._after_key(event)
+
+    def _key_press(self, event: QKeyEvent) -> None:
         if self._blocks_protected_edit(event):
             return
         # PROMPT.md (Quick Access Bar work): "Indent using spaces" -- a plain Tab (no modifiers, so
@@ -613,6 +675,163 @@ class _PlainTextEditor(QPlainTextEdit):
                 self.insertPlainText(" " * width)
                 return
         super().keyPressEvent(event)
+
+    # -- autocomplete (a Megalo file) -------------------------------------------------------------------
+
+    def _completion_key(self, event: QKeyEvent) -> bool:
+        """While the list shows, Up/Down move in it, Enter/Tab take the choice and Escape closes it -- ``True`` when
+        ``event`` was one of those."""
+        popup = self._completion_popup
+        if popup is None or not popup.isVisible():
+            return False
+        key = event.key()
+        plain = event.modifiers() in (Qt.KeyboardModifier.NoModifier, Qt.KeyboardModifier.KeypadModifier)
+        if key in (Qt.Key.Key_Up, Qt.Key.Key_Down) and plain:
+            popup.move_selection(-1 if key == Qt.Key.Key_Up else 1)
+            return True
+        if key in (Qt.Key.Key_Return, Qt.Key.Key_Enter, Qt.Key.Key_Tab) and plain:
+            popup.accept()
+            return True
+        if key == Qt.Key.Key_Escape:
+            popup.hide()
+            return True
+        return False
+
+    def _after_key(self, event: QKeyEvent) -> None:
+        typed = event.text()
+        if typed and _COMPLETION_TRIGGER.fullmatch(typed[-1]):
+            self.update_completions()
+        elif event.key() == Qt.Key.Key_Backspace and self.completions_showing():
+            self.update_completions()
+        elif self._completion_popup is not None and event.key() not in (Qt.Key.Key_Shift, Qt.Key.Key_Control):
+            self._completion_popup.hide()
+
+    def completions_showing(self) -> bool:
+        return self._completion_popup is not None and self._completion_popup.isVisible()
+
+    def completion_items(self) -> list[str]:
+        """What the autocomplete list offers now (empty when it isn't showing)."""
+        return self._completion_popup.items() if self.completions_showing() else []
+
+    def update_completions(self) -> None:
+        """Asks :data:`_completion_provider` what could finish the word at the cursor and shows it (or hides the list
+        when nothing could). Only in an editable Megalo file."""
+        provider = _completion_provider
+        cursor = self.textCursor()
+        found = []
+        if provider is not None and is_megalo_path(self.path) and not self.isReadOnly() and not cursor.hasSelection():
+            line = cursor.block().text()[: cursor.positionInBlock()]
+            try:
+                start, found = provider(self.path, line, self.toPlainText())
+            except RuntimeError:  # the window that set it has gone
+                found = []
+        if not found:
+            if self._completion_popup is not None:
+                self._completion_popup.hide()
+            return
+        if self._completion_popup is None:
+            from in_reach_ide.completion_popup import CompletionPopup
+
+            self._completion_popup = CompletionPopup(self.viewport())
+            self._completion_popup.chosen.connect(self._insert_completion)
+        self._completion_start = cursor.block().position() + start
+        rect = self.cursorRect(cursor)
+        self._completion_popup.show_completions(found, QPoint(rect.left(), rect.bottom() + 2))
+
+    def _insert_completion(self, text: str) -> None:
+        cursor = self.textCursor()
+        end = cursor.position()
+        cursor.setPosition(min(self._completion_start, end))
+        cursor.setPosition(end, QTextCursor.MoveMode.KeepAnchor)
+        cursor.insertText(text)
+        self.setTextCursor(cursor)
+        if self._completion_popup is not None:
+            self._completion_popup.hide()
+
+    # -- the selection's copies, and Convert to Alias (a Megalo file) -----------------------------------
+
+    def _selected_snippet(self) -> str | None:
+        """The selected text, if it's something a Megalo file can match and name: one line, not blank."""
+        cursor = self.textCursor()
+        if not cursor.hasSelection() or not is_megalo_path(self.path):
+            return None
+        text = cursor.selectedText()
+        if "\u2029" in text or not text.strip():
+            return None
+        return text.strip()
+
+    def _update_selection_matches(self) -> None:
+        from in_reach.app.script_project.refactor import occurrences
+
+        snippet = self._selected_snippet()
+        spans = occurrences(self.toPlainText(), snippet) if snippet else []
+        if spans != self._match_spans:
+            self._match_spans = spans
+            self._apply_extra_selections(self._error_selections())
+
+    def selection_match_count(self) -> int:
+        """How many copies of the selected text the file has (0 when nothing matchable is selected)."""
+        return len(self._match_spans)
+
+    def contextMenuEvent(self, event) -> None:  # noqa: ANN001 -- QContextMenuEvent
+        menu = self.createStandardContextMenu(event.pos())
+        self.add_convert_to_alias(menu)
+        menu.exec(event.globalPos())
+
+    def add_convert_to_alias(self, menu) -> None:  # noqa: ANN001 -- QMenu
+        """Adds "Convert to Alias..." to ``menu`` when the selection is something in a Megalo file's code."""
+        if self.isReadOnly() or not self._match_spans:
+            return
+        menu.addSeparator()
+        menu.addAction("Convert to Alias...", self.convert_selection_to_alias)
+
+    def _ask_alias_name(self, snippet: str) -> str:
+        """The new alias's name, or ``""`` if cancelled. A test seam."""
+        from PyQt6.QtWidgets import QInputDialog
+
+        name, accepted = QInputDialog.getText(
+            self, "Convert to Alias", f"Name for {snippet} (every copy of it in this file becomes the name):"
+        )
+        return name.strip() if accepted else ""
+
+    def convert_selection_to_alias(self) -> bool:
+        """Names the selected text: every copy of it in this file becomes the name, and an ``alias`` line saying what it
+        stands for goes in with the other aliases (:func:`in_reach.app.script_project.refactor.convert_to_alias`). One
+        undo step. ``False``: cancelled, or the name can't be used (the reason is shown)."""
+        from PyQt6.QtWidgets import QMessageBox
+
+        from in_reach.app.script_project.refactor import check_alias_name, convert_to_alias
+
+        snippet = self._selected_snippet()
+        if not snippet:
+            return False
+        name = self._ask_alias_name(snippet)
+        if not name:
+            return False
+        text = self.toPlainText()
+        problem = check_alias_name(text, name)
+        if problem:
+            QMessageBox.warning(self, "Convert to Alias", problem)
+            return False
+        try:
+            converted = convert_to_alias(text, snippet, name)
+        except ValueError as exc:
+            QMessageBox.warning(self, "Convert to Alias", str(exc))
+            return False
+        line = self.textCursor().blockNumber() + 1  # the alias line lands above it
+        cursor = QTextCursor(self.document())
+        cursor.beginEditBlock()
+        cursor.select(QTextCursor.SelectionType.Document)
+        cursor.insertText(converted)
+        cursor.endEditBlock()
+        block = self.document().findBlockByNumber(min(line, self.document().blockCount() - 1))
+        self.setTextCursor(QTextCursor(block))
+        return True
+
+    def focusOutEvent(self, event) -> None:  # noqa: ANN001 -- QFocusEvent
+        if self._completion_popup is not None:
+            self._completion_popup.hide()
+        super().focusOutEvent(event)
 
     def insertFromMimeData(self, source) -> None:  # noqa: ANN001 -- QMimeData
         # Paste (also drag-drop/middle-click paste, which never reaches keyPressEvent at all) goes
@@ -648,6 +867,20 @@ class _PlainTextEditor(QPlainTextEdit):
         for start, end in self._forge_label_name_spans():
             spans.append((start, end, _FORGE_LABEL_NAME_WARNING))
         spans.extend(self._never_applied_field_spans())
+        spans.extend((start, end, _DOCSTRING_WHERE_WARNING) for start, end in self._docstring_where_spans())
+        return spans
+
+    def _docstring_where_spans(self) -> list[tuple[int, int]]:
+        """In ``script/DOCSTRINGS.md``: each docstring's ``<!-- file:line -->`` line (from the newline before it, so it
+        can't be joined onto its title either) -- in-reach writes those, following the script."""
+        if self.path is None or self.path.name != _DOCSTRINGS_FILENAME:
+            return []
+        spans = []
+        offset = 0
+        for line in self.toPlainText().split("\n"):
+            if _DOCSTRING_WHERE.match(line):
+                spans.append((max(offset - 1, 0), offset + len(line)))
+            offset += len(line) + 1
         return spans
 
     def _forge_label_name_spans(self) -> list[tuple[int, int]]:
@@ -862,6 +1095,74 @@ class _PlainTextEditor(QPlainTextEdit):
         QToolTip.hideText()
         super().leaveEvent(event)
 
+    # -- indent guides (see in_reach_ide.indent_guides) --------------------------------------------
+
+    def _guide_x(self, block, level_index: int, remembered: dict[int, float]) -> float | None:
+        """The viewport x where indentation step ``level_index`` (0-based) starts on ``block``: the real position of
+        that character in the line's own indentation, so wide spaces and tabs are measured as drawn. A blank line has
+        no such character; it uses the x an earlier line gave that step."""
+        text = block.text()
+        tabs = len(text) - len(text.lstrip("\t"))
+        index = level_index if level_index <= tabs else tabs + (level_index - tabs) * self._indent_unit
+        leading = len(text) - len(text.lstrip(" \t"))
+        if text.strip() and index <= leading:
+            cursor = QTextCursor(block)
+            cursor.setPosition(block.position() + index)
+            x = float(self.cursorRect(cursor).left())
+            remembered[level_index] = x
+            return x
+        return remembered.get(level_index)
+
+    def indent_guide_lines(self) -> list[tuple[float, float, float, bool]]:
+        """Every guide segment to draw in the visible part of the document: ``(x, top, bottom, active)`` in viewport
+        coordinates, one per line per level (guide ``k`` on every line at least ``k`` levels deep), ``active`` for the
+        cursor's own block (:func:`~in_reach_ide.indent_guides.active_guide`)."""
+        depths = self._indent_depths
+        if not depths:
+            return []
+        active = indent_guides.active_guide(depths, self.textCursor().blockNumber())
+        segments: list[tuple[float, float, float, bool]] = []
+        remembered: dict[int, float] = {}
+        offset = self.contentOffset()
+        block = self.firstVisibleBlock()
+        # Steps the first visible lines are too shallow to show still need an x for a blank line below them.
+        probe = block
+        while probe.isValid() and probe.blockNumber() > 0 and len(remembered) < max(depths):
+            probe = probe.previous()
+            for level_index in range(depths[probe.blockNumber()] if probe.blockNumber() < len(depths) else 0):
+                if level_index not in remembered:
+                    self._guide_x(probe, level_index, remembered)
+        height = self.viewport().height()
+        while block.isValid():
+            geometry = self.blockBoundingGeometry(block).translated(offset)
+            if geometry.top() > height:
+                break
+            number = block.blockNumber()
+            if block.isVisible() and number < len(depths):
+                for level in range(1, depths[number] + 1):
+                    x = self._guide_x(block, level - 1, remembered)
+                    if x is None:
+                        continue
+                    is_active = active is not None and active[0] == level and active[1] <= number <= active[2]
+                    segments.append((x, geometry.top(), geometry.bottom(), is_active))
+            block = block.next()
+        return segments
+
+    def paintEvent(self, event: QPaintEvent) -> None:
+        super().paintEvent(event)
+        segments = self.indent_guide_lines()
+        if not segments:
+            return
+        painter = QPainter(self.viewport())
+        base = self.palette().color(QPalette.ColorRole.Text)
+        quiet, bright = QColor(base), QColor(base)
+        quiet.setAlpha(_GUIDE_ALPHA)
+        bright.setAlpha(_ACTIVE_GUIDE_ALPHA)
+        for x, top, bottom, is_active in segments:
+            painter.setPen(QPen(bright if is_active else quiet, 1))
+            painter.drawLine(QPointF(x + 0.5, top), QPointF(x + 0.5, bottom))
+        painter.end()
+
     def _hover_text_at(self, pos: QPoint) -> str | None:
         """What :data:`_megalo_hover_provider` says about the name under ``pos`` in a Megalo file -- a storage name's slot
         and ``@doc``, a resource's table entry, a fragment, block, module or tag -- or ``None``. A dotted name
@@ -897,6 +1198,9 @@ class _PlainTextEditor(QPlainTextEdit):
         for start, end, message in self._error_spans:
             if start <= char_pos < end:
                 return message
+        found = [message for start, end, message, _severity in self.problem_spans() if start <= char_pos < end]
+        if found:
+            return "\n".join(found)
         return self._protected_span_warning_at(char_pos)
 
     def _protected_span_warning_at(self, char_pos: int) -> str | None:
@@ -1015,7 +1319,12 @@ class _PlainTextEditor(QPlainTextEdit):
             self._line_number_area.update()
 
     def _on_text_changed(self) -> None:
-        self._fold_ranges = compute_fold_ranges(self.toPlainText())
+        text = self.toPlainText()
+        # Megalo folds on its do/if/function ... end blocks; everything else on brackets.
+        self._fold_ranges = compute_megalo_fold_ranges(text) if is_megalo_path(self.path) else compute_fold_ranges(text)
+        lines = self.toPlainText().split("\n")
+        self._indent_unit = indent_guides.indent_unit(lines)
+        self._indent_depths = indent_guides.levels(lines, self._indent_unit)
         self._collapsed_folds &= self._fold_ranges.keys()
         self._apply_fold_visibility()
         self._update_breadcrumb()
@@ -1086,19 +1395,75 @@ class _PlainTextEditor(QPlainTextEdit):
             self._minimap.set_highlight_line(None)
         self._apply_extra_selections(self._error_selections())
 
+    # -- the Problems tab's entries, underlined ---------------------------------------------------------
+
+    def refresh_problem_marks(self) -> None:
+        """Asks :data:`_problem_provider` for this file's problems and underlines them -- red for an error, amber for a
+        warning, the message shown on hover. Called by the window whenever the Problems tab changes (the script is
+        checked as it's typed), and when a file is opened."""
+        provider = _problem_provider
+        marks = []
+        if provider is not None and self.path is not None:
+            try:
+                marks = list(provider(self.path))
+            except RuntimeError:  # the window that set it has gone
+                marks = []
+        if marks == self._problem_marks:
+            return
+        self._problem_marks = marks
+        if self._minimap is not None:
+            doc = self.document()
+            lines = {doc.findBlock(start).blockNumber() for start, _end, _message in self._error_spans}
+            lines |= {line - 1 for line, _column, _message, severity in marks if severity == "error" and line > 0}
+            self._minimap.set_error_lines(lines)
+        self._apply_extra_selections(self._error_selections())
+
+    def problem_error_count(self) -> int:
+        """How many errors the Problems tab lists for this file."""
+        return sum(1 for mark in self._problem_marks if mark[3] == "error")
+
+    def problem_spans(self) -> list[tuple[int, int, str, str]]:
+        """``(start, end, message, severity)`` for each problem mark, placed in the text as it is now: the word at its
+        column, or (no column past the first -- the checker's parse errors carry none -- or nothing there) the line's
+        text. A mark on a blank line (the end of the file, for a missing ``end``) goes on the last line with text above
+        it; one with no text above it is left out."""
+        doc = self.document()
+        spans = []
+        for line, column, message, severity in self._problem_marks:
+            block = doc.findBlockByNumber(min(max(line, 1), doc.blockCount()) - 1)
+            while block.isValid() and not block.text().strip():
+                block = block.previous()
+                column = 0
+            if not block.isValid():
+                continue
+            text = block.text()
+            start = len(text) - len(text.lstrip())
+            end = len(text.rstrip())
+            if column > 1 and column - 1 < len(text):
+                index = column - 1
+                word = next((m for m in _WORD.finditer(text) if m.start() <= index < m.end()), None)
+                if word is not None:
+                    start, end = word.start(), word.end()
+                elif not text[index].isspace():
+                    start, end = index, index + 1
+            spans.append((block.position() + start, block.position() + end, message, severity))
+        return spans
+
     def _error_selections(self) -> list[QTextEdit.ExtraSelection]:
-        """Rebuilds just the schema-error underline selections (cheap: :attr:`_error_spans` is
-        already computed) -- used to redraw them alongside a freshly changed "Go to Line" highlight
+        """Rebuilds just the underline selections -- schema errors (cheap: :attr:`_error_spans` is already computed)
+        and the Problems tab's marks -- used to redraw them alongside a freshly changed "Go to Line" highlight
         without re-running the schema check itself."""
         doc = self.document()
         selections = []
-        for start, end, _message in self._error_spans:
+        spans = [(start, end, message, "error") for start, end, message in self._error_spans]
+        spans += [span for span in self.problem_spans() if span[3] in ("error", "warning")]
+        for start, end, _message, severity in spans:
             cursor = QTextCursor(doc)
             cursor.setPosition(start)
             cursor.setPosition(end, QTextCursor.MoveMode.KeepAnchor)
             fmt = QTextCharFormat()
             fmt.setUnderlineStyle(QTextCharFormat.UnderlineStyle.SpellCheckUnderline)
-            fmt.setUnderlineColor(QColor(_ERROR_COLOR))
+            fmt.setUnderlineColor(QColor(_ERROR_COLOR if severity == "error" else _WARNING_COLOR))
             selection = QTextEdit.ExtraSelection()
             selection.cursor = cursor
             selection.format = fmt
@@ -1110,7 +1475,20 @@ class _PlainTextEditor(QPlainTextEdit):
         selections (schema-error underlines, the "Go to Line" highlight) has to be merged here
         rather than each calling ``setExtraSelections()`` on its own, which would just clobber
         whichever one ran last."""
-        selections = list(base_selections)
+        matches = []
+        for start, end in getattr(self, "_match_spans", []):
+            cursor = QTextCursor(self.document())
+            cursor.setPosition(start)
+            cursor.setPosition(end, QTextCursor.MoveMode.KeepAnchor)
+            fmt = QTextCharFormat()
+            color = self.palette().color(QPalette.ColorRole.Highlight)
+            color.setAlpha(_MATCH_HIGHLIGHT_ALPHA)
+            fmt.setBackground(color)
+            match = QTextEdit.ExtraSelection()
+            match.cursor = cursor
+            match.format = fmt
+            matches.append(match)
+        selections = matches + list(base_selections)
         if self._goto_highlight_block is not None:
             block = self.document().findBlockByNumber(self._goto_highlight_block)
             if block.isValid():
@@ -1195,9 +1573,19 @@ class TextEditorWidget(QWidget):
         # changes that width, so nothing needs to re-trigger it from here.
         self._edit.blockCountChanged.connect(lambda _count: self._minimap.update())
         self._edit.verticalScrollBar().valueChanged.connect(lambda _value: self._minimap.update())
+        # The gutter is a sibling, not part of the viewport, so nothing repaints it when the text scrolls or changes
+        # unless it's told: it follows every repaint the view asks for (a scroll moves it by the same amount).
+        self._edit.updateRequest.connect(self._on_view_update_request)
+        self._edit.verticalScrollBar().valueChanged.connect(lambda _value: self._line_number_area.update())
 
         self.setFocusProxy(self._edit)
         self._edit.set_path(path)
+
+    def _on_view_update_request(self, rect, dy: int) -> None:  # noqa: ANN001 -- QRect
+        area = self._line_number_area
+        if dy:
+            area.scroll(0, dy)
+        area.update(0, rect.y(), area.width(), rect.height())
 
     # -- find/replace ---------------------------------------------------------------------------
 

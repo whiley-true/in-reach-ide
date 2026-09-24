@@ -46,20 +46,26 @@ IDE's "Verify System Settings" -- Tesseract on `PATH`, the Steam / Halo: MCC / g
   screen (`file_dialogs.py`), a text/JSON/Markdown editor (`editor.py`, `markdown_preview.py`) with
   a VSCode-style Find/Replace bar (`find_replace.py`) -- spaces drawn wider than the font's own, no line
   wrapping by default (a long line scrolls under a horizontal scrollbar) and "Toggle Word Wrap" (Alt+Z,
-  `word_wrap.py`: one switch for every editor, persisted to the `.env`) to opt in; the bottom bar's Ln/Col/Spaces
+  `word_wrap.py`: one switch for every editor, persisted to the `.env`) to opt in; VSCode-style indent guides (a faint
+  line at each indentation level, the one around the cursor's block brighter; `indent_guides.py` works out the step, each
+  line's depth and the active guide, `_PlainTextEditor.indent_guide_lines()` where they go); the bottom bar's Ln/Col/Spaces
   segments show for `.txt`/`.json`/`.mgl` tabs (`editor.shows_cursor_info`); a theme switch re-picks every open
   editor's and diff tab's syntax colours in place (`MainPanelArea.refresh_theme`) without saving or reloading
   anything -- primary-sidebar
   panels, each under one shared bold title strip naming whichever view is showing
   (`MainWindow.sidebar_header`), (Dashboard/Welcome `welcome.py`, Explorer `explorer.py` -- also
-  owns the Quick Launch section (Export File and Launch RVT on one row, View Compiled Megalo across the next, plus
-  Built-in/Hot Reload buttons that open a `system_verify`-resolved install folder in the OS file
-  explorer, including an "Open In-Reach Maps" one that opens `.in-reach/maps`, created on demand)
-  and, pinned to the bottom of the Dashboard, a "Notepad" box (`notepad.py`): a line-numbered,
-  autosaving plain-text view of the active project's own `Notes.txt` with an "Open in Editor"/"Open
-  in Window" pair of buttons that hand the same file to a real editor tab or a popout window (`Notes.txt`
-  is created empty for a new project, so the box's own placeholder text shows; there is no longer any
-  "Notes format" setting or txt/md switching), Git `git_panel.py`
+  owns the Quick Launch section (Export File and Launch RVT on one row, View Compiled Megalo across the next; the
+  Welcome tab has Start, Help and Recent -- no verify section: `MainWindow.verify_on_first_run`, from `app.run`, opens
+  Verify System Settings by itself while nothing is verified, and the palette's "Verify System Settings" runs it again;
+  Halo: MCC via Steam only), a
+  collapsible "Locations" section of buttons that open a `system_verify`-resolved install folder in the OS file
+  explorer (the variant/map folders, "Open In-Reach Maps" -- `.in-reach/maps`, created on demand -- and "Open Hot
+  Reload Folder"), an empty collapsible "Hot Reload Config" section, and, pinned to the bottom of the Dashboard, a
+  "Notepad (gitignored)" section (`notepad.py`): a line-numbered, autosaving plain-text view of the active project's own
+  `Notes.txt`, its "Open in Editor" button on the section's header line (`CollapsibleSection.add_header_widget`; the
+  palette still has "Open Notepad in Window"). `Notes.txt` is personal: opening a project makes sure its `.gitignore`
+  lists it (`in_reach.app.new_project.ensure_gitignore`) and the shadow VCS never versions it (`Notes.txt` is created
+  empty for a new project, so the box's own placeholder text shows), Git `git_panel.py`
   -- a view over the Dulwich shadow VCS below, with a live "Changes" section split into staged/
   unstaged file lists (each with its own right-click menu: open changes/open file/open file (HEAD)/
   discard/stage or unstage/reveal in file explorer) plus an inline commit box, a "Stamp Release"
@@ -80,15 +86,41 @@ IDE's "Verify System Settings" -- Tesseract on `PATH`, the Steam / Halo: MCC / g
   own `open_diff()`) showing that file's `HEAD` version against its current on-disk content, each
   side with its own shrunk-text preview along its right edge (added/removed lines highlighted)
   mirroring the ordinary editor's own minimap,
-  Scripts `scripts_panel.py` (the active project's script, either kind: an Envs section -- each
-  `script/env/<name>.env` with its flags and constants, the active one marked, Use/Edit/New/Delete -- its check
-  state and budget; a single file adds Check and "Convert to Project (experimental)", which asks first and offers
+  Scripts `scripts_panel.py` (the active project's script, either kind, every part under a collapsible section heading:
+  Envs -- each `script/env/<name>.env` as one column of names (no "(no env)" row; the active one has a star to its
+  left; each row's flags and constants are its tooltip), Use/Edit/Copy (a new env copying the selected)/New (an empty
+  one)/Delete; Apply with more than one env first asks which to build with (`MainWindow._choose_build_env`, with "Don't
+  ask again", back on in Settings) -- then Script (its problems, only when it has
+  any, and Open Script) and Budget; a single file adds, under Script, "Use the button above to edit the Megalo Script. It
+  has the same syntax as Reach Variant Tool (a link to its docs) with the following additional features:" and the
+  in-reach annotations it can use, and "Convert to Project (experimental)" (no Check button: the script is checked as it
+  is typed, saved, or
+  changed on disk -- `MainWindow._script_watcher`), which asks first and offers
   "Back Up && Convert" (`api.backup_script()`); a script project adds modules, blocks (drag to reorder, "Move to"
-  on a fragment), Link/New Module and fusion. It does no checking itself: `MainWindow._refresh_script_views()`
-  checks once per change and feeds it, the Problems tab, the Documentation view and the editor's hover text),
-  Documentation `documentation_panel.py` (the script's generated documentation, `in_reach.app.script_project.docs`:
-  the rendered overview with a tag filter, every `@doc` note as a row that opens its line, Refresh, "Open
-  overview.md" (writes `build/docs/`) and "Add README"), Testing `testing_panel.py`, Playtest `playtest_panel.py` (a sprinting-man
+  on a fragment), Check/Link/New Module and fusion. It does no checking itself: `MainWindow._refresh_script_views()`
+  checks once per change and feeds it, the Problems tab, the Documentation view and the editor's hover text; every
+  open editor underlines its file's Problems-tab entries -- red for an error, amber for a warning, the message on
+  hover (`editor.set_problem_provider`, `TextEditorWidget.refresh_problem_marks`, redrawn on
+  `ProblemsPanel.problems_changed`) -- and saving a file with errors asks first but saves if told to
+  (`TabPane._confirm_save_with_errors`; a pending check runs before the question, `MainWindow._check_before_save`);
+  building stays blocked, since the link fails. A Megalo file's editor also autocompletes as it is typed
+  (`completion_popup.py`, a list that is the editor's child so the editor keeps the keys -- Up/Down, Enter/Tab, Escape;
+  `editor.set_completion_provider`, `MainWindow._complete_script` over `in_reach.app.script_project.completion`, with the
+  open project's declared names from its docs; after `alias NAME =` only alias targets). A Megalo file also folds its
+  `do`/`if`/`function` ... `end` blocks (`code_folding.compute_megalo_fold_ranges`; the line-number gutter, a sibling
+  of the text view, follows its `updateRequest` so it scrolls with the text), tints every copy of the selected
+  text, and offers "Convert to Alias..." on right-click (one undo step, over `script_project.refactor`)),
+  Documentation `documentation_panel.py` (the script's generated documentation, `in_reach.app.script_project.docs`, top
+  to bottom: a collapsible Description (the documentation's own, plain text, `api.set_docs_description` ->
+  `script/docs.json`; not the gametype's in-game one); "Open Overview.md" (writes `build/docs/`) and Refresh, then "Edit
+  Readme.md" (creates `script/README.md` if missing) and "Preview Readme.md"; Docstrings (Docstring/Where; a docstring's
+  longer text is its section of `script/DOCSTRINGS.md` -- activating one or Edit opens that file at the section,
+  `api.docstring_section`; its `<!-- file:line -->` where-lines can't be edited there (protected spans, like a JSON
+  `$schema` line) and follow each save of a `.mgl` file, an open tab of it reloading unless it has unsaved edits --
+  `MainWindow._refresh_docstrings`; Locate goes to its line; Remove deletes it after asking, `api.remove_doc_entry` -- a file with
+  unsaved edits is refused); Tags (the tag filter, which narrows the docstrings, over an info box saying what carries
+  each tag). There is no rendered overview in the panel),
+  Testing `testing_panel.py`, Playtest `playtest_panel.py` (a sprinting-man
   activity-bar icon directly under Testing, with its own View menu/palette entry), LLM `llm_panel.py` --
   Testing/Playtest/LLM are all still placeholder-only stubs -- Map Files `maps_panel.py`, which lists clickable,
   link-styled folder "slugs" for the Map Variants/Hopper Variants/User Maps folders that Verify
@@ -107,7 +139,7 @@ IDE's "Verify System Settings" -- Tesseract on `PATH`, the Steam / Halo: MCC / g
   a "Select Env" palette submenu (one entry per `script/env` env of the open project, the active one
   marked, plus "No env") and "New Env", mirrored by a left-edge status-bar "Env: <name>" segment that
   opens the same pick (hidden with no project or no envs), checking the script as you type (any editor
-  on a file under the project's `script/` -- `output.txt`, `.mgl`, a manifest or an env file -- is checked
+  on a file under the project's `script/` -- `output.mgl`, `.mgl`, a manifest or an env file -- is checked
   unsaved with `api.check_text` 400 ms after typing stops, via `MainPanelArea(on_text_edited=...)`), hover
   text in Megalo editors for a declared name (its slot or table entry and its `@doc`,
   `editor.set_megalo_hover_provider()`), a bottom panel (`bottom_panel.py`)
@@ -126,7 +158,8 @@ IDE's "Verify System Settings" -- Tesseract on `PATH`, the Steam / Halo: MCC / g
   order, and a fragment's right-click "Move to" puts it in another block. Every one is a text edit through
   `in_reach.api` (`set_module_enabled`/`set_block_order`/`move_fragment` -> `project.toml` / a `-- @fragment` line), then a
   re-check; a refused edit is reported and the views snap back. The palette has "Enable/Disable Script Module".
-- "View Decompiled" (the Scripts view's button + palette) opens `build/Decompiled.txt` -- the built `.bin`'s script as RVT
+- "Open Script" (the Scripts view's button + palette) opens the script to edit -- `script/output.mgl`, or a script project's
+  first block file. "View Decompiled" (palette) opens `build/Decompiled.txt`, read-only -- the built `.bin`'s script as RVT
   shows it -- via `api.show(folder, "rvt")`; "View Compiled Megalo" (Dashboard) is the `rvt+` view. A project created from
   the Welcome tab is built once straight away (`WelcomeTab._initial_build` -> `api.initial_build`), so it always has one.
 - `tests/` -- `pytest-qt` widget tests (`test_ide_smoke.py` is the largest and covers most of `main_window.py`/

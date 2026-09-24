@@ -115,7 +115,7 @@ def test_directives_are_bold() -> None:
 @pytest.mark.parametrize(
     ("relative", "expected"),
     [
-        ("script/blocks/setup.mgl", True), ("script/modules/m/m.mgl", True), ("script/output.txt", True),
+        ("script/blocks/setup.mgl", True), ("script/modules/m/m.mgl", True), ("script/output.mgl", True),
         ("build/Compiled.txt", True), ("notes/output.txt", False), ("settings/settings.json", False),
         ("script/env/dev.env", False), ("readme.md", False),
     ],
@@ -135,7 +135,7 @@ def test_the_editor_highlights_a_mgl_file_and_not_a_plain_txt(qtbot, tmp_path: P
     editor.set_path(tmp_path / "notes.txt")
     assert editor._edit._highlighter is None
 
-    editor.set_path(tmp_path / "script" / "output.txt")
+    editor.set_path(tmp_path / "script" / "output.mgl")
     assert isinstance(editor._edit._highlighter, MegaloSyntaxHighlighter)
 
 

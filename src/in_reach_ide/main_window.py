@@ -8,6 +8,7 @@ hand-implemented here rather than provided by the OS chrome -- see ``in_reach_id
 
 from __future__ import annotations
 
+import os
 import subprocess
 from pathlib import Path
 from typing import Callable
@@ -46,7 +47,14 @@ from in_reach_ide import zoom as zoom_module
 from in_reach_ide.activity_bar import DEFAULT_VIEW, ActivityBar
 from in_reach_ide.bottom_panel import BottomPanel
 from in_reach_ide.documentation_panel import DocumentationPanel
-from in_reach_ide.editor import TextEditorWidget, is_megalo_path, set_megalo_hover_provider, shows_cursor_info
+from in_reach_ide.editor import (
+    TextEditorWidget,
+    is_megalo_path,
+    set_megalo_hover_provider,
+    set_completion_provider,
+    set_problem_provider,
+    shows_cursor_info,
+)
 from in_reach_ide.explorer import ExplorerPanel
 from in_reach_ide.git_panel import GitPanel
 from in_reach_ide.kanban_panel import KanbanPanel
@@ -55,7 +63,7 @@ from in_reach_ide import maps_panel as maps_panel_module
 from in_reach_ide.maps_panel import MapsPanel
 from in_reach_ide.playtest_panel import PlaytestPanel
 from in_reach_ide.quick_access import Command, QuickAccessBar
-from in_reach_ide.scripts_panel import ScriptsPanel
+from in_reach_ide.scripts_panel import ScriptsPanel, status_text
 from in_reach_ide.search_panel import SearchPanel
 from in_reach_ide.settings_dialog import SettingsDialog
 from in_reach_ide.status_bar import StatusBar
@@ -722,8 +730,11 @@ class MainWindow(QWidget):
             project_title=self._active_project_title,
             on_cursor_info=self._show_cursor_info,
             on_text_edited=self._on_text_edited,
+            before_save=self._check_before_save,
         )
         self._main_splitter.addWidget(self.main_panel)
+        self.main_panel.settings_env = project.get_project_dir(self.root_dir) / ".env"
+        self.main_panel.empty_bar_actions = self._empty_bar_actions
         self._typed_editor = None
         self._check_timer = QTimer(self)
         self._check_timer.setSingleShot(True)
@@ -736,12 +747,21 @@ class MainWindow(QWidget):
         # whenever RVT writes over it from outside this process.
         self._bin_watcher = QFileSystemWatcher(self)
         self._bin_watcher.fileChanged.connect(self._on_watched_bin_changed)
+        # The script is checked whenever it changes -- typed (see _on_text_edited), saved, or written from outside.
+        self._script_watcher = QFileSystemWatcher(self)
+        self._script_watcher.fileChanged.connect(self._on_script_changed_on_disk)
+        self._script_watcher.directoryChanged.connect(self._on_script_changed_on_disk)
+        self._script_disk_timer = QTimer(self)
+        self._script_disk_timer.setSingleShot(True)
+        self._script_disk_timer.setInterval(300)
+        self._script_disk_timer.timeout.connect(self._check_script_from_disk)
 
         env_project_dir = project.get_project_dir(self.root_dir)
         self.explorer_panel.active_project_changed.connect(self.search_panel.set_project_folder)
         self.explorer_panel.active_project_changed.connect(self.kanban_panel.set_project_folder)
         self.explorer_panel.active_project_changed.connect(self.git_panel.set_project)
         self.explorer_panel.active_project_changed.connect(self._rewatch_project_bin)
+        self.explorer_panel.active_project_changed.connect(self._rewatch_script)
         self.explorer_panel.active_project_changed.connect(self._on_active_project_changed)
         self.explorer_panel.active_project_changed.connect(self._sync_project_dependent_views)
         self.explorer_panel.active_project_changed.connect(self._persist_active_project)
@@ -784,7 +804,6 @@ class MainWindow(QWidget):
         self.explorer_panel.launch_rvt_requested.connect(self.launch_rvt)
         self.explorer_panel.open_builtin_folder_requested.connect(self._open_builtin_folder)
         self.explorer_panel.notepad_open_in_editor_requested.connect(self.open_notepad_in_editor)
-        self.explorer_panel.notepad_open_in_window_requested.connect(self.open_notepad_in_window)
         self.explorer_panel.notepad_saved.connect(self._on_notepad_saved)
         self.maps_panel.open_folder_requested.connect(self._open_builtin_folder)
         self.kanban_panel.open_board_requested.connect(self._open_kanban_board)
@@ -796,18 +815,28 @@ class MainWindow(QWidget):
         self._bottom_panel_card = style.wrap_tab_widget(self.bottom_panel)
         self._main_splitter.addWidget(self._bottom_panel_card)
         self.bottom_panel.problems_panel.open_requested.connect(self._on_problem_activated)
+        self.bottom_panel.problems_panel.problems_changed.connect(self._mark_problems_in_editors)
+        set_problem_provider(self._problems_for_path)
+        self._completion_names: dict[str, str] = {}
+        self._completion_single_file = True
+        set_completion_provider(self._complete_script)
         self.scripts_panel.env_selected.connect(self._set_env)
         self.scripts_panel.env_edit_requested.connect(self.edit_env)
         self.scripts_panel.env_new_requested.connect(self.new_env)
+        self.scripts_panel.env_copy_requested.connect(self.copy_env)
         self.scripts_panel.env_delete_requested.connect(self.delete_env)
         self.scripts_panel.check_requested.connect(self.check_script_project)
         self.scripts_panel.link_requested.connect(self.link_script_project)
         self.scripts_panel.convert_requested.connect(self.convert_to_project)
-        self.scripts_panel.view_decompiled_requested.connect(self.view_decompiled)
+        self.scripts_panel.open_script_requested.connect(self.open_script)
         self.documentation_panel.open_location_requested.connect(self._on_problem_activated)
         self.documentation_panel.refresh_requested.connect(self.refresh_documentation)
         self.documentation_panel.open_overview_requested.connect(self.open_docs_overview)
-        self.documentation_panel.create_readme_requested.connect(self.create_script_readme)
+        self.documentation_panel.edit_readme_requested.connect(self.edit_script_readme)
+        self.documentation_panel.preview_readme_requested.connect(self.preview_script_readme)
+        self.documentation_panel.edit_entry_requested.connect(self.edit_doc_entry)
+        self.documentation_panel.remove_entry_requested.connect(self.remove_doc_entry)
+        self.documentation_panel.description_save_requested.connect(self.save_docs_description)
         self.scripts_panel.new_module_requested.connect(self.new_script_module)
         self.scripts_panel.open_file_requested.connect(self._on_explorer_file_activated)
         self.scripts_panel.module_toggled.connect(self.set_script_module_enabled)
@@ -1127,6 +1156,7 @@ class MainWindow(QWidget):
         return [
             Command(label="New Window", action=self.open_new_window, detail=_SHORTCUT_NEW_WINDOW),
             Command(label="Load Welcome Tab", action=self.open_welcome_tab),
+            Command(label="Verify System Settings", action=self.verify_system_settings),
             Command(label="Open Folder", action=self.open_folder, detail=_SHORTCUT_OPEN_FOLDER),
             Command(label="Save", action=self.save_current, detail=_SHORTCUT_SAVE),
             Command(label="Save All", action=self.save_all),
@@ -1181,6 +1211,8 @@ class MainWindow(QWidget):
             Command(label="Link Script Project", action=self.link_script_project),
             Command(label="Convert to Project (experimental)", action=self.convert_to_project),
             Command(label="Open Documentation Overview", action=self.open_docs_overview),
+            Command(label="Edit Script Readme", action=self.edit_script_readme),
+            Command(label="Preview Script Readme", action=self.preview_script_readme),
             Command(label="New Script Module", action=self.new_script_module),
             Command(label="Enable Script Module", children=self._script_module_toggle_commands(True)),
             Command(label="Disable Script Module", children=self._script_module_toggle_commands(False)),
@@ -1261,6 +1293,7 @@ class MainWindow(QWidget):
             ),
             Command(label="Export RVT File", action=self.export_rvt_file),
             Command(label="View Output.txt", action=self.view_output_txt),
+            Command(label="Open Script", action=self.open_script),
             Command(label="View Decompiled", action=self.view_decompiled),
         ]
 
@@ -1499,6 +1532,35 @@ class MainWindow(QWidget):
 
     # -- File menu ------------------------------------------------------------------------------
 
+    def verify_system_settings(self) -> None:
+        """"Verify System Settings" -- the step-by-step check of the Halo: MCC install (Steam, the game, its variant and
+        map folders; :class:`~in_reach_ide.verify_dialog.VerifyDialog`), then every Welcome tab brought up to date."""
+        from in_reach_ide.verify_dialog import VerifyDialog
+
+        dialog = VerifyDialog(project.get_project_dir(self.root_dir), self)
+        dialog.run_finished.connect(self._refresh_welcome_tabs)
+        dialog.start()
+        dialog.exec()
+        self._refresh_welcome_tabs()
+
+    def verify_on_first_run(self) -> None:
+        """On a fresh install (nothing verified yet), opens :meth:`verify_system_settings` by itself -- in-reach can't
+        make a project from the game's variants until it knows where they are. Called once the window is showing."""
+        from within_reach import system_verify
+
+        if not any(system_verify.verified_keys(project.get_project_dir(self.root_dir)).values()):
+            _logger.info("nothing verified yet -- opening Verify System Settings")
+            self.verify_system_settings()
+
+    def _refresh_welcome_tabs(self) -> None:
+        from in_reach_ide.welcome import WelcomeTab
+
+        for pane in self.main_panel.panes:
+            for index in range(pane.count()):
+                widget = pane.widget(index)
+                if isinstance(widget, WelcomeTab):
+                    widget.refresh()
+
     def open_welcome_tab(self) -> None:
         """"Load Welcome Tab" (PROMPT.md) -- brings the Welcome tab back into the active pane,
         e.g. after it's been closed."""
@@ -1536,7 +1598,7 @@ class MainWindow(QWidget):
         """The activity bar's settings cog -- opens the Settings popout (System/UI stubbed, Theme
         live) centered at half the screen's size (see
         :class:`~in_reach_ide.settings_dialog.SettingsDialog`'s own ``showEvent``)."""
-        dialog = SettingsDialog(self, on_theme_changed=self.on_theme_applied)
+        dialog = SettingsDialog(self, on_theme_changed=self.on_theme_applied, settings_env=self.main_panel.settings_env)
         dialog.exec()
 
     def open_recent_project(self, folder: Path) -> None:
@@ -1723,6 +1785,7 @@ class MainWindow(QWidget):
         # Every open editor keeps its text (and any unsaved edits) -- only its syntax colours are re-picked, from
         # the new theme's own base colour rather than a widget palette that hasn't caught up yet.
         self.main_panel.refresh_theme(theme.build_palette().color(QPalette.ColorRole.Base))
+        self.explorer_panel.refresh_progress_bars(theme.build_palette())
         self.refresh_icon_colors(theme.palette_colors.get("window_text"))
         env_file.update_env_value(
             project.get_project_dir(self.root_dir) / ".env", theme_module.THEME_KEY, theme.name
@@ -1988,7 +2051,15 @@ class MainWindow(QWidget):
     def _on_active_project_changed(self, folder: Path | None) -> None:
         """PROMPT.md: "rvt should not be launchable if no project is open" -- and the Apply
         button's own enabled state depends on the *active* project's own ``settings/`` too, so both
-        need re-checking on every tab switch, not just when a project first opens/closes."""
+        need re-checking on every tab switch, not just when a project first opens/closes. An opened project also gets
+        the ``.gitignore`` entry for its (personal) notepad if it predates that."""
+        if folder is not None:
+            from in_reach.app import new_project
+
+            try:
+                new_project.ensure_gitignore(folder)
+            except OSError:
+                pass  # a read-only folder: nothing to fix, and nothing worth stopping the open for
         self.explorer_panel.rvt_button.setEnabled(folder is not None)
         self._refresh_apply_enabled(folder)
         self._refresh_script_views(folder)
@@ -2055,12 +2126,26 @@ class MainWindow(QWidget):
         folder = self.explorer_panel.current_folder
         if path == self._notepad_path():
             self.explorer_panel.notepad.reload()
+        if folder is not None and is_megalo_path(path):
+            self._refresh_docstrings(folder)
         self._refresh_apply_enabled(folder)
         if folder is not None:
             self._refresh_vcs_status(folder)
             # A saved env file (or the active-env pointer) can change what the indicator says.
             self._refresh_env_indicator(folder)
             self._refresh_script_views(folder)
+
+    def _refresh_docstrings(self, folder: Path) -> None:
+        """After a script file is saved: ``script/DOCSTRINGS.md`` follows it (each docstring's where-line), and an open
+        tab of it is brought up to date -- unless that tab has unsaved edits of its own, which are never overwritten."""
+        from in_reach import api
+
+        try:
+            changed = api.refresh_docstrings(folder)
+        except api.ApiError:
+            return
+        if changed is not None and not self.main_panel.dirty_tab_names([changed]):
+            self.main_panel.reload_open_tabs([changed])
 
     def _on_notepad_saved(self, path: Path) -> None:
         """The Dashboard Notepad just autosaved ``path`` -- brings any open editor tab for the same
@@ -2726,7 +2811,7 @@ class MainWindow(QWidget):
 
     def apply_settings_changes(self) -> None:
         """"Apply" (the activity bar's own button) -- compiles the active project's ``settings/``
-        + ``script/output.txt`` into a real gametype ``.bin`` (PROMPT.md: "applying changes
+        + ``script/output.mgl`` into a real gametype ``.bin`` (PROMPT.md: "applying changes
         should try and compile the jsons into a gametype"). A no-op with no project open (the
         button is disabled then anyway, see :meth:`_on_active_project_changed`).
 
@@ -2746,6 +2831,8 @@ class MainWindow(QWidget):
         if folder is None:
             return
         project_dir = project.get_project_dir(self.root_dir)
+        if not self._choose_build_env(folder):
+            return
         self.activity_bar.apply_button.setEnabled(False)
         result = self._run_compile(project_dir, folder)
         self._report_build_problems(folder, result)  # every message, at its file and line, on the Problems tab
@@ -2787,7 +2874,7 @@ class MainWindow(QWidget):
 
     def view_output_txt(self) -> None:
         """"View Output.txt" (PROMPT.md, under the Dashboard's own button row) -- opens a
-        read-only, always-freshly-regenerated view of the active project's ``script/output.txt``
+        read-only, always-freshly-regenerated view of the active project's ``script/output.mgl``
         (see :func:`~in_reach.app.output_view.write_output_view`'s own docstring for why it's
         regenerated on every click rather than kept continuously in sync). A no-op with no project
         open."""
@@ -2804,7 +2891,7 @@ class MainWindow(QWidget):
 
     def _env_commands(self) -> list[Command]:
         """The "Select Env" palette pick: one entry per ``script/env/*.env`` of the active project, the current one
-        marked, plus "No env" -- empty with no project open or no envs to choose between. (See
+        marked -- empty with no project open or no envs to choose between. (See
         :mod:`in_reach.app.script_preprocess`: the active env's ``${CONSTANTS}`` and ``-- @if`` blocks are applied to the
         script before it's compiled and before ``Compiled.txt`` is written.)"""
         folder = self.explorer_panel.current_folder
@@ -2816,12 +2903,10 @@ class MainWindow(QWidget):
         if not names:
             return []
         active = script_preprocess.active_env_name(folder)
-        commands = [
+        return [
             Command(label=name, detail="active" if name == active else "", action=lambda n=name: self._set_env(n))
             for name in names
         ]
-        commands.append(Command(label="No env", detail="active" if active not in names else "", action=lambda: self._set_env(None)))
-        return commands
 
     def _set_env(self, name: str | None) -> None:
         """Makes ``name`` (or, for ``None``, no env) the one the active project builds with. A no-op with no project
@@ -2841,6 +2926,23 @@ class MainWindow(QWidget):
         self._refresh_script_views(folder)  # the env's flags and constants change what the script builds
         self._refresh_apply_enabled(folder)
 
+    def open_script(self) -> None:
+        """"Open Script" -- opens the file the script is edited in, editable: ``script/output.mgl`` for a single file, the
+        first block (in build order) that has a file for a script project, else its ``project.toml``. A no-op with no
+        project open."""
+        folder = self.explorer_panel.current_folder
+        if folder is None:
+            return
+        from in_reach.app.script_project import is_linked, load_project
+
+        path = folder / "script" / "output.mgl"
+        if is_linked(folder):
+            project_ = load_project(folder)
+            files = [project_.blocks[name].file for name in project_.order if name in project_.blocks]
+            first = next((file for file in files if file is not None), None)
+            path = folder / "script" / (first.path if first is not None else "project.toml")
+        self.main_panel.active_pane.open_file(path)
+
     def _refresh_env_indicator(self, folder: Path | None) -> None:
         """The status bar's left-edge "Env: <name>" segment for ``folder``: hidden with no project open or none of
         ``script/env``'s envs to choose between, else the active one (or "No env"). Clicking it opens the same pick as
@@ -2859,8 +2961,15 @@ class MainWindow(QWidget):
             self.quick_access.open_action_list(commands, "Select Env")
 
     def new_env(self) -> None:
-        """"New Env" (and the Scripts view's New...) -- asks for a name, adds ``script/env/<name>.env`` -- a copy of the
-        active env if there is one, else empty -- and opens it. Doesn't make it active. A no-op with no project open."""
+        """"New Env" (and the Scripts view's New...) -- asks for a name, adds an empty ``script/env/<name>.env`` (no flags,
+        no values -- just the explanatory header) and opens it. Doesn't make it active. A no-op with no project open."""
+        self._add_env(copy_from=None)
+
+    def copy_env(self, source: str) -> None:
+        """The Scripts view's Copy -- asks for a name and adds a new env that is a copy of ``source``, then opens it."""
+        self._add_env(copy_from=source)
+
+    def _add_env(self, *, copy_from: str | None) -> None:
         folder = self.explorer_panel.current_folder
         if folder is None:
             return
@@ -2870,8 +2979,6 @@ class MainWindow(QWidget):
         name = self._ask_env_name()
         if not name:
             return
-        active = script_preprocess.active_env_name(folder)
-        copy_from = active if active in script_preprocess.list_envs(folder) else None
         try:
             api.new_env(folder, name, copy_from=copy_from)
         except (api.ApiError, OSError) as exc:
@@ -2881,6 +2988,62 @@ class MainWindow(QWidget):
         self._refresh_env_indicator(folder)
         self._refresh_script_views(folder)
         self.main_panel.active_pane.open_file(script_preprocess.env_path(folder, name))
+
+    def _choose_build_env(self, folder: Path) -> bool:
+        """Before a build: with more than one env (and the question not turned off in Settings), asks which to build
+        with -- the active one chosen to begin with -- and makes the answer the active env. ``False``: cancelled."""
+        from in_reach import api
+        from in_reach.app import script_preprocess
+        from in_reach_ide import ide_settings
+
+        names = script_preprocess.list_envs(folder)
+        settings_env = self.main_panel.settings_env
+        if len(names) < 2 or not ide_settings.ask_env_on_build(settings_env):
+            return True
+        active = script_preprocess.active_env_name(folder)
+        from in_reach.app import new_project
+
+        starter = new_project.DEFAULT_ENV
+        default = active if active in names else (starter if starter in names else names[0])
+        answer = self._ask_build_env(names, default)
+        if answer is None:
+            return False
+        chosen, dont_ask = answer
+        if dont_ask:
+            ide_settings.set_ask_env_on_build(settings_env, False)
+        if chosen != active:
+            try:
+                api.set_env(folder, chosen)
+            except api.ApiError as exc:
+                QMessageBox.critical(self, "in-reach", f"Couldn't use env {chosen}:\n{exc}")
+                return False
+            _logger.info("building %s with env %s", folder, chosen)
+            self._refresh_env_indicator(folder)
+            self._refresh_script_views(folder)
+        return True
+
+    def _ask_build_env(self, names: list[str], default: str) -> tuple[str, bool] | None:
+        """Which env to build with, and whether to stop asking -- ``None`` if cancelled. A test seam."""
+        from PyQt6.QtWidgets import QCheckBox, QComboBox, QDialog, QDialogButtonBox, QVBoxLayout
+
+        dialog = QDialog(self)
+        dialog.setWindowTitle("Build With Which Env?")
+        layout = QVBoxLayout(dialog)
+        layout.addWidget(QLabel("This project has more than one env. Build with:"))
+        combo = QComboBox()
+        combo.addItems(names)
+        combo.setCurrentText(default)
+        layout.addWidget(combo)
+        dont_ask = QCheckBox("Don't ask again (turn it back on in Settings, UI)")
+        layout.addWidget(dont_ask)
+        buttons = QDialogButtonBox(QDialogButtonBox.StandardButton.Ok | QDialogButtonBox.StandardButton.Cancel)
+        buttons.button(QDialogButtonBox.StandardButton.Ok).setText("Build")
+        buttons.accepted.connect(dialog.accept)
+        buttons.rejected.connect(dialog.reject)
+        layout.addWidget(buttons)
+        if dialog.exec() != QDialog.DialogCode.Accepted:
+            return None
+        return combo.currentText(), dont_ask.isChecked()
 
     def _ask_env_name(self) -> str:
         """The new env's name, or ``""`` if cancelled. A test seam, like :meth:`_ask_module_name`."""
@@ -2923,7 +3086,7 @@ class MainWindow(QWidget):
     # -- the script: a single file or a script project ---------------------------------------------
 
     def _refresh_script_views(self, folder: Path | None) -> None:
-        """Re-checks ``folder``'s script -- a script project, or its single ``script/output.txt`` (see
+        """Re-checks ``folder``'s script -- a script project, or its single ``script/output.mgl`` (see
         :mod:`in_reach.app.script_project`) -- and updates everything that shows the result: the bottom panel's Problems
         tab, the Scripts view, the Documentation view and what hovering a name in an editor says. Nothing is written."""
         from in_reach import api
@@ -2970,6 +3133,9 @@ class MainWindow(QWidget):
             set_megalo_hover_provider(None)
             return
         self.documentation_panel.show_docs(folder, result.docs)
+        self._completion_names = {entry["name"]: entry["slot"] for entry in result.docs.storage if entry.get("slot")}
+        self._completion_single_file = result.docs.mode == "single"
+        set_completion_provider(self._complete_script)
         texts = hover_texts(result.docs)
         scripts = (folder / "script").resolve()
 
@@ -3000,26 +3166,139 @@ class MainWindow(QWidget):
             return
         self.main_panel.active_pane.open_file(docs_dir(folder) / OVERVIEW_MD, force_reload=True)
 
-    def create_script_readme(self) -> None:
-        """The Documentation view's Add README -- creates ``script/README.md`` (never over an existing one) and opens
-        it. Its text heads the documentation page."""
+    def _script_readme(self, *, create: bool) -> Path | None:
+        """``script/README.md`` of the open project, written first from a starter text when ``create`` and there is none
+        (never over an existing one). ``None``: no project, or no README and not ``create``."""
         folder = self.explorer_panel.current_folder
         if folder is None:
-            return
-        from in_reach.app import new_project
-
+            return None
         readme = folder / "script" / "README.md"
         if not readme.exists():
+            if not create:
+                return None
+            from in_reach.app import new_project
+
             title = new_project.read_project_title(folder) or folder.name
             readme.parent.mkdir(parents=True, exist_ok=True)
             readme.write_text(
                 f"# {title}\n\nWhat this game mode is, and how it plays.\n\n"
-                "This file heads the Documentation view and `build/docs/overview.md`. Notes in the script itself are "
-                "`-- @doc` lines, and `-- @tags a, b` says what a file is about.\n",
+                "This file heads the Documentation view and `build/docs/overview.md`. Entries in the script itself are "
+                "`-- @doc` lines (Markdown), and `-- @tags a, b` says what a file is about.\n",
                 encoding="utf-8",
             )
-        self.main_panel.active_pane.open_file(readme)
+            self._refresh_docs(folder)
+        return readme
+
+    def _empty_bar_actions(self) -> list[tuple[str, object]]:
+        """What clicking a tab bar's empty space offers (``TabPane.empty_bar_menu``): the notepad, the script (a single
+        file's -- a script project has blocks instead), the overview and the README. Disabled with no project open."""
+        from in_reach.app.script_project import is_linked
+
+        folder = self.explorer_panel.current_folder
+        has = folder is not None
+        actions: list[tuple[str, object]] = [("Load Notepad", self.open_notepad_in_editor if has else None)]
+        if not has or not is_linked(folder):
+            actions.append(("Open Script", self.open_script if has else None))
+        has_readme = has and (folder / "script" / "README.md").is_file()
+        actions += [
+            ("Open Overview.md", self.open_docs_overview if has else None),
+            ("Edit Readme.md", self.edit_script_readme if has else None),
+            ("Preview Readme.md", self.preview_script_readme if has_readme else None),
+        ]
+        return actions
+
+    def edit_script_readme(self) -> None:
+        """The Documentation view's Edit Readme.md -- opens ``script/README.md`` as text, creating it first if there is
+        none. Its text heads the documentation page."""
+        readme = self._script_readme(create=True)
+        if readme is not None:
+            self.main_panel.active_pane.open_file(readme, editable_markdown=True)
+
+    def preview_script_readme(self) -> None:
+        """The Documentation view's Preview Readme.md -- ``script/README.md`` rendered (a no-op with none yet)."""
+        readme = self._script_readme(create=False)
+        if readme is not None:
+            self.main_panel.active_pane.open_file(readme, force_reload=not self.main_panel.dirty_tab_names([readme]))
+
+    def _confirm_remove_doc_entry(self, note: str) -> bool:
+        first = next((line for line in note.splitlines() if line.strip()), "")
+        answer = QMessageBox.question(
+            self, "Remove Entry", f"Remove this entry's -- @doc lines from the script, and its text?\n\n{first}"
+        )
+        return answer == QMessageBox.StandardButton.Yes
+
+    def _rewrite_doc_entry(self, file: str, line: int, note: str, text: str | None = None) -> None:
+        folder = self.explorer_panel.current_folder
+        if folder is None:
+            return
+        from in_reach import api
+
+        path = folder / "script" / file
+        if self.main_panel.dirty_tab_names([path]):
+            QMessageBox.warning(self, "in-reach", f"{path.name} has unsaved changes -- save it first.")
+            return
+        try:
+            api.edit_doc_entry(folder, file, line, note, text)
+        except api.ApiError as exc:
+            QMessageBox.critical(self, "in-reach", f"Couldn't change the entry:\n{exc}")
+            return
+        self.main_panel.reload_open_tabs([path])
         self._refresh_docs(folder)
+
+    def edit_doc_entry(self, file: str, line: int, note: str = "", text: str = "") -> None:
+        """The Documentation view's Edit (or activating a docstring) -- opens ``script/DOCSTRINGS.md`` (brought in step
+        with the script first) at the docstring's section, to write its longer text there. ``file`` is relative to
+        ``script/``."""
+        folder = self.explorer_panel.current_folder
+        if folder is None:
+            return
+        from in_reach import api
+
+        try:
+            path, text_line = api.docstring_section(folder, file, line)
+        except api.ApiError as exc:
+            QMessageBox.critical(self, "in-reach", f"Couldn't open the docstring:\n{exc}")
+            return
+        pane = self.main_panel.active_pane
+        pane.open_file(path, editable_markdown=True, force_reload=not self.main_panel.dirty_tab_names([path]))
+        editor = pane.currentWidget()
+        if isinstance(editor, TextEditorWidget) and text_line:
+            block = editor.document().findBlockByNumber(text_line - 1)
+            editor.setTextCursor(QTextCursor(block))
+            editor.centerCursor()
+            editor.setFocus()
+
+    def remove_doc_entry(self, file: str, line: int, note: str = "") -> None:
+        """The Documentation view's Remove -- deletes the entry's ``-- @doc`` lines and its text, after asking."""
+        if self._confirm_remove_doc_entry(note):
+            self._rewrite_doc_entry(file, line, "")
+
+    def save_docs_description(self, text: str) -> None:
+        """The Documentation view's Description Save -- the documentation's own description (``script/docs.json``, the
+        overview's Description section; not the gametype's in-game one)."""
+        folder = self.explorer_panel.current_folder
+        if folder is None:
+            return
+        from in_reach import api
+
+        try:
+            api.set_docs_description(folder, text)
+        except api.ApiError as exc:
+            QMessageBox.critical(self, "in-reach", f"Couldn't save the description:\n{exc}")
+            return
+        self._refresh_docs(folder)
+
+    # -- autocomplete -----------------------------------------------------------------------------------
+
+    def _complete_script(self, path: Path, line: str, text: str):
+        """What an editor's autocomplete offers (``editor.set_completion_provider``): Megalo words, and the open
+        project's own names -- only in a file under its ``script/``."""
+        from in_reach.app.script_project.completion import complete
+
+        folder = self.explorer_panel.current_folder
+        in_project = folder is not None and (folder / "script").resolve() in Path(path).resolve().parents
+        names = self._completion_names if in_project else {}
+        return complete(line, text=text, declared=names, single_file=self._completion_single_file or not in_project)
 
     # -- checking as you type -----------------------------------------------------------------------
 
@@ -3027,7 +3306,7 @@ class MainWindow(QWidget):
     CHECK_AS_YOU_TYPE_MS = 400
 
     def _on_text_edited(self, editor) -> None:
-        """An editor's text changed: if it is part of the active project's script (its ``output.txt``, a ``.mgl``, a
+        """An editor's text changed: if it is part of the active project's script (its ``output.mgl``, a ``.mgl``, a
         manifest or an env file), check it again once typing pauses -- unsaved, via ``api.check_text``."""
         folder = self.explorer_panel.current_folder if hasattr(self, "explorer_panel") else None
         path = getattr(editor, "path", None)
@@ -3063,7 +3342,34 @@ class MainWindow(QWidget):
         panel = self.bottom_panel.problems_panel
         if path.suffix.lower() == ".env":
             problems = [p for p in panel.problems() if p.path != path] + problems
+        elif checked.link_result is not None:
+            self.scripts_panel.set_status(checked.link_result)  # the Scripts view follows along too
         panel.set_problems(problems)
+
+    def _check_before_save(self, editor) -> None:
+        """Just before ``editor`` is saved: a check still waiting for typing to pause runs now, so the "save with
+        errors?" question is about the text being saved."""
+        if self._check_timer.isActive() and getattr(self, "_typed_editor", None) is editor:
+            self._check_timer.stop()
+            self._check_typed_script()
+
+    def _problems_for_path(self, path: Path) -> list[tuple[int, int, str, str]]:
+        """The Problems tab's entries for ``path``, for its editor to underline."""
+        key = os.path.normcase(os.path.normpath(path))
+        return [
+            (p.line, p.column, p.message, p.severity)
+            for p in self.bottom_panel.problems_panel.problems()
+            if p.path is not None and os.path.normcase(os.path.normpath(p.path)) == key
+        ]
+
+    def _mark_problems_in_editors(self) -> None:
+        """Every open editor redraws its underlines from the Problems tab (see ``TextEditorWidget.refresh_problem_marks``)."""
+        set_problem_provider(self._problems_for_path)
+        for pane in self.main_panel.panes:
+            for index in range(pane.count()):
+                widget = pane.widget(index)
+                if isinstance(widget, TextEditorWidget):
+                    widget.refresh_problem_marks()
 
     # -- script projects (script/project.toml) ------------------------------------------------------
 
@@ -3221,8 +3527,8 @@ class MainWindow(QWidget):
         box.setWindowTitle("Convert to Project (experimental)")
         box.setText("Convert this script into a script project?")
         box.setInformativeText(
-            "This is experimental. script/output.txt is copied to script/blocks/main.mgl and script/project.toml is "
-            "added; from then on the project is built from its blocks and modules, and script/output.txt is no longer "
+            "This is experimental. script/output.mgl is copied to script/blocks/main.mgl and script/project.toml is "
+            "added; from then on the project is built from its blocks and modules, and script/output.mgl is no longer "
             "compiled. There is no automatic way back.\n\n"
             "A backup first is recommended: Back Up && Convert copies script/ to .in-reach/backups/ before converting."
         )
@@ -3509,6 +3815,37 @@ class MainWindow(QWidget):
             return "in-reach"
         return new_project.read_project_title(folder)
 
+    def _rewatch_script(self, folder: Path | None) -> None:
+        """Watches the active project's script files -- ``script/`` itself, its env folder, and every script file in
+        them -- so a change made outside the IDE is checked too (:meth:`_on_script_changed_on_disk`)."""
+        watcher = self._script_watcher
+        for paths in (watcher.files(), watcher.directories()):
+            if paths:
+                watcher.removePaths(paths)
+        if folder is None:
+            return
+        scripts = folder / "script"
+        directories = [d for d in (scripts, scripts / "env", scripts / "blocks") if d.is_dir()]
+        directories += [d for d in (scripts / "modules").glob("*") if d.is_dir()]
+        files = [f for d in directories for f in d.iterdir() if f.is_file() and f.suffix.lower() in (".txt", ".mgl", ".mglo", ".env", ".toml")]
+        for path in [*directories, *files]:
+            watcher.addPath(str(path))
+
+    def _on_script_changed_on_disk(self, _path: str) -> None:
+        """A script file (or its folder) changed on disk: check the script again once the writes settle. A file an editor
+        holds unsaved edits to is left to checking-as-you-type, which sees the edits."""
+        self._script_disk_timer.start()
+
+    def _check_script_from_disk(self) -> None:
+        folder = self.explorer_panel.current_folder
+        self._rewatch_script(folder)  # an editor's save-by-replace drops a watched file
+        if folder is None:
+            return
+        typed = getattr(self, "_typed_editor", None)
+        if typed is not None or self._check_timer.isActive():
+            return  # a check of the buffer being typed in is about to run, and knows better
+        self._refresh_script_views(folder)
+
     def _rewatch_project_bin(self, _folder: Path | None) -> None:
         """Re-points :attr:`_bin_watcher` at the newly-active project's own freshly-*compiled*
         ``.bin`` (see :func:`~in_reach.app.new_project.compiled_variant_path` -- the same file
@@ -3529,7 +3866,7 @@ class MainWindow(QWidget):
     def _on_watched_bin_changed(self, path: str) -> None:
         """Re-decompiles the watched ``.bin`` into ``settings/`` and ``build/``'s
         ``*.autogenerated.json`` snapshot, then -- if RVT's save changed the *script* -- pulls it into
-        ``script/output.txt`` too (:meth:`_pull_script_from_rvt`; the resync itself never touches that file,
+        ``script/output.mgl`` too (:meth:`_pull_script_from_rvt`; the resync itself never touches that file,
         see :func:`~in_reach.app.rvt.decompile.resync_from_bin`'s own docstring). Best-effort: a
         ``.bin`` RVT happened to be mid-write on, or any other decompile failure, is silently
         swallowed rather than popping an error over a background sync the user didn't explicitly
@@ -3601,13 +3938,13 @@ class MainWindow(QWidget):
 
     def _pull_script_from_rvt(self, folder: Path, before: script_sync.ScriptSnapshot | None) -> None:
         """If RVT's save changed the script (not just the file), puts RVT's version in
-        ``script/output.txt`` -- without this the next Apply rebuilds the ``.bin`` from ``output.txt`` and
+        ``script/output.mgl`` -- without this the next Apply rebuilds the ``.bin`` from ``output.mgl`` and
         silently throws RVT's script edits away. ``before`` is :func:`~in_reach.app.script_sync.
         read_snapshot`'s result from *before* the resync that followed the save.
 
         Pulls silently unless that would lose something (see :class:`~in_reach.app.script_sync.
-        PullReason`), in which case it asks first; declining leaves ``output.txt`` alone, and the RVT
-        version is simply not adopted (the next Apply builds from ``output.txt`` as it is).
+        PullReason`), in which case it asks first; declining leaves ``output.mgl`` alone, and the RVT
+        version is simply not adopted (the next Apply builds from ``output.mgl`` as it is).
         """
         after = script_sync.read_snapshot(folder)
         plan = script_sync.plan_pull(folder, before, after)
@@ -3618,14 +3955,14 @@ class MainWindow(QWidget):
         if self.main_panel.dirty_tab_names([script]):
             reasons.append(script_sync.PullReason.UNSAVED_EDITS)
         if reasons and not self._confirm_pull_script([reason.value for reason in reasons]):
-            _logger.info("kept script/output.txt over ReachVariantTool's changed script for %s", folder)
+            _logger.info("kept script/output.mgl over ReachVariantTool's changed script for %s", folder)
             return
         script_sync.pull(folder, after)
         self.main_panel.reload_open_tabs([script])
         _logger.info("pulled ReachVariantTool's script into %s", script)
 
     def _confirm_pull_script(self, reasons: list[str]) -> bool:
-        """Asks whether to replace ``script/output.txt`` with the script ReachVariantTool just saved,
+        """Asks whether to replace ``script/output.mgl`` with the script ReachVariantTool just saved,
         listing what that would lose (``reasons``) -- kept as its own method purely as a test seam, same
         reasoning as :meth:`_confirm_overwrite_rvt_changes`.
 
@@ -3637,8 +3974,8 @@ class MainWindow(QWidget):
         joined = "\n".join(f"- {reason}" for reason in reasons)
         box.setText(
             "You changed this project's script in ReachVariantTool.\n\n"
-            f"Replacing script/output.txt with it would lose:\n\n{joined}\n\n"
-            "Use ReachVariantTool's script, or keep script/output.txt as it is? (Keeping it means the "
+            f"Replacing script/output.mgl with it would lose:\n\n{joined}\n\n"
+            "Use ReachVariantTool's script, or keep script/output.mgl as it is? (Keeping it means the "
             "next Apply builds from it and discards the script changes made in ReachVariantTool.)"
         )
         use_button = box.addButton("Use RVT's Script", QMessageBox.ButtonRole.AcceptRole)

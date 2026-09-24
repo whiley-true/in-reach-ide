@@ -165,3 +165,15 @@ def test_branches_are_dropped_when_the_label_alone_already_fills_the_row(qtbot) 
 
     assert label != long_message
     assert branch_text == ""
+
+
+def test_hovering_a_row_says_which_env_the_project_built_with(qtbot) -> None:
+    widget = GitGraphWidget()
+    qtbot.addWidget(widget)
+    newer = Snapshot(sha="b" * 40, message="stamp: v1.0.0 First", at=0.0, stamp_message="First", version="1.0.0",
+                     parents=["a" * 40], env="release")
+    older = Snapshot(sha="a" * 40, message="gametype init", at=0.0, stamp_message=None, env=None)
+    widget.set_snapshots([newer, older])
+
+    assert widget.row_tooltip(0).splitlines() == ["v1.0.0 -- First", "Env: release", "b" * 12]
+    assert widget.row_tooltip(1).splitlines()[1] == "Env: none"

@@ -8,25 +8,26 @@ summarizing its build's own space usage and per-subsystem (Triggers/Conditions/A
 Labels/Strings) counts against this project's own confirmed engine caps (see
 :func:`~in_reach.app.rvt.settings_io.load_build_stats`/:func:`~in_reach.app.rvt.strings_io.
 count_script_strings`/:data:`_MAX_TRIGGERS` et al.), "Quick Launch" (Export File and Launch RVT on one
-row, View Compiled Megalo across the next -- View Decompiled is the Scripts view's -- plus "Built-in"/"Hot Reload" buttons that open the matching
-:mod:`within_reach.system_verify`-resolved folder in the OS file explorer), and "Settings" pointed
+row, View Compiled Megalo across the next -- View Decompiled is the Scripts view's), "Locations" (buttons that open the
+matching :mod:`within_reach.system_verify`-resolved folder in the OS file explorer: the game's variant and map folders,
+In-Reach Maps and the hot-reload folder), "Hot Reload Config" (empty for now), and "Settings" pointed
 at its own ``settings/`` subfolder. There used to be a fourth, generic "browse the whole project
 folder" tree too; PROMPT.md asked for it to go now that Script/Settings cover the two subfolders
 actually worth browsing by hand -- and later, a "Script" quick-access box exactly like Settings'
-own, pointed at ``script/`` (whose only ever entry was ``output.txt``); PROMPT.md ("please also
+own, pointed at ``script/`` (whose only ever entry was ``output.mgl``); PROMPT.md ("please also
 remove output from script") asked for that to go too, now that the button row's own "View
 Output.txt" is the supported way to look at it (see :meth:`ExplorerPanel.view_output_requested`).
 The personal game/map variant folder trees that used to live here too (PROMPT.md: "remove the
 Personal Map and Game Variants sections for now, they will later go in their own sidepanel") came
-back in a different form as Quick Launch's own "Built-in" buttons above -- :mod:`in_reach.app.
+back in a different form as the Locations buttons above -- :mod:`in_reach.app.
 system_verify` is still the one place their folders are actually resolved, same as the Welcome
 tab's own Verify System Settings flow.
 
 A fifth box, "Notepad" (PROMPT.md: "in dashboard please add a 'Notepad' section that should be box at
 the bottom"), takes whatever vertical room is left at the bottom of the panel: a line-numbered,
-autosaving view of the project's own ``Notes.txt`` (see :mod:`in_reach_ide.notepad`), with buttons that
-hand the same file to a real editor tab or a popout window. Quick Launch also carries an "Open
-In-Reach Maps" button, opening in-reach's own ``.in-reach/maps`` folder.
+autosaving view of the project's own ``Notes.txt`` (see :mod:`in_reach_ide.notepad`), with an Open in Editor button
+on its header line. The file is personal -- the project's ``.gitignore`` lists it and the shadow VCS skips it -- so the
+section is titled "Notepad (gitignored)".
 
 The Settings tree is a plain ``QFileSystemModel``/``QTreeView`` pair (so it reflects live disk
 changes for free) with a custom icon provider (:mod:`in_reach_ide.file_icons`) swapped in for the
@@ -38,7 +39,7 @@ from __future__ import annotations
 from pathlib import Path
 
 from PyQt6.QtCore import QModelIndex, Qt, pyqtSignal
-from PyQt6.QtGui import QFileSystemModel, QFont
+from PyQt6.QtGui import QColor, QFileSystemModel, QFont, QPalette
 from PyQt6.QtWidgets import (
     QApplication,
     QFrame,
@@ -106,7 +107,7 @@ def _new_tree() -> tuple[QTreeView, QFileSystemModel]:
     for column in (1, 2, 3):  # Size, Type, Date Modified -- a flat file list doesn't need these
         tree.hideColumn(column)
     tree.setUniformRowHeights(True)
-    # PROMPT.md: "please remove the bubble outline around ... settings, and output.txt" --
+    # PROMPT.md: "please remove the bubble outline around ... settings, and output.mgl" --
     # QTreeView (like every QAbstractScrollArea) defaults to a sunken StyledPanel frame around
     # itself, which read as a bordered "bubble" boxing in the Settings/Script trees' own handful of
     # rows. Same fix already applied to the Welcome tab's own QScrollArea, see welcome.py.
@@ -117,7 +118,7 @@ def _new_tree() -> tuple[QTreeView, QFileSystemModel]:
 def _cap_tree_rows(tree: QTreeView, rows: int) -> None:
     """Caps ``tree``'s own height to fit exactly ``rows`` rows, no more -- for the Settings/Script
     quick-access trees, whose subfolder always holds a fixed, known number of entries (3
-    ``settings/*.json`` files, 1 ``script/output.txt``), so there's no reason either should reserve
+    ``settings/*.json`` files, 1 ``script/output.mgl``), so there's no reason either should reserve
     a QTreeView's own generic, content-independent size hint worth of extra blank space below its
     last real row (PROMPT.md: "there is still too much empty space under settings. it only needs
     to be 3 files vertical").
@@ -170,6 +171,32 @@ _FLAT_PROGRESS_BAR_STYLE = (
     " text-align: center; }"
     "QProgressBar::chunk { background-color: palette(highlight); }"
 )
+#: How far the bars' fill is from the theme's highlight toward its base colour: the plain highlight read too dark under
+#: the bar's own text, in the light theme and the dark alike.
+PROGRESS_CHUNK_BLEND = 0.5
+#: How much smaller the bars' text is than the Dashboard's -- at the full size a descender (y, g) lost its tail to
+#: the bar's bottom edge.
+PROGRESS_TEXT_SHRINK_PT = 2.0
+
+
+def progress_chunk_color(palette: QPalette) -> QColor:
+    """The bars' fill: the highlight, :data:`PROGRESS_CHUNK_BLEND` of the way to the base colour."""
+    high, base = palette.color(QPalette.ColorRole.Highlight), palette.color(QPalette.ColorRole.Base)
+    t = PROGRESS_CHUNK_BLEND
+    return QColor(
+        round(high.red() + (base.red() - high.red()) * t),
+        round(high.green() + (base.green() - high.green()) * t),
+        round(high.blue() + (base.blue() - high.blue()) * t),
+    )
+
+
+def progress_bar_style(palette: QPalette) -> str:
+    chunk = progress_chunk_color(palette).name()
+    return (
+        "QProgressBar { border: none; border-radius: 0px; background-color: palette(alternate-base);"
+        f" color: {palette.color(QPalette.ColorRole.Text).name()}; text-align: center; }}"
+        f"QProgressBar::chunk {{ background-color: {chunk}; }}"
+    )
 
 #: PROMPT.md: "please in the dashboard make the progress bars a little smaller (they're a bit
 #: imposing at the moment)" -- Fusion's own default QProgressBar height (~23px) reads as oversized
@@ -197,25 +224,15 @@ _DASHBOARD_BUTTON_STYLE = (
 )
 
 
-#: PROMPT.md: "please then make a section 'Quick Launch' ... underneath that top row of buttons,
-#: we want a subheader saying 'Built-in' ... then a subheader saying hot reload" -- a plain label,
-#: one step down from a full _CollapsibleSection header (these aren't collapsible themselves, just
-#: grouping labels within the Quick Launch section's own body). Later, PROMPT.md: "please update
-#: dashbaord so headings are bold and subheadings are italic" -- italic distinguishes it from a
-#: full section header's own bold treatment (see _SECTION_HEADER_STYLE) without it reading as just
-#: as prominent.
-_SUBHEADER_STYLE = "QLabel { font-style: italic; }"
-
-
-def _subheader(text: str) -> QLabel:
-    label = QLabel(text)
-    label.setStyleSheet(_SUBHEADER_STYLE)
-    return label
+#: The Dashboard Notepad's title: its file, ``Notes.txt``, is personal (see :func:`in_reach.app.new_project.ensure_gitignore`).
+NOTEPAD_TITLE = "Notepad (gitignored)"
+#: What the (for now empty) Hot Reload Config section says.
+HOT_RELOAD_CONFIG_PLACEHOLDER = "No hot reload settings yet."
 
 
 def _folder_button(text: str) -> QToolButton:
-    """A button styled exactly like :attr:`ExplorerPanel.export_button` -- one of the "Built-in"/
-    "Hot Reload" quick-launch buttons that opens a system_verify-resolved folder in the OS file
+    """A button styled exactly like :attr:`ExplorerPanel.export_button` -- one of the Locations
+    buttons that opens a system_verify-resolved folder in the OS file
     explorer (MainWindow owns actually opening it, see :attr:`ExplorerPanel.
     open_builtin_folder_requested`), same division of labor as export_button/rvt_button/
     view_output_button above."""
@@ -286,20 +303,15 @@ class ExplorerPanel(QWidget):
     #: export_requested/view_output_requested above.
     launch_rvt_requested = pyqtSignal()
 
-    #: PROMPT.md: "underneath that top row of buttons, we want a subheader saying 'Built-in' and
-    #: buttons for[...] then a subheader saying hot reload[...] Open HotReload Folder" -- emitted
-    #: with the :mod:`within_reach.system_verify` env key each button's own folder resolves under
+    #: The Locations section's buttons -- emitted with the :mod:`within_reach.system_verify` env key each button's own folder resolves under
     #: (e.g. :data:`~within_reach.system_verify.STANDARD_VARIANTS_KEY`); MainWindow owns actually
     #: resolving and opening it (it's the one that already knows this window's own ``root_dir``,
     #: see :meth:`~in_reach_ide.main_window.MainWindow._open_builtin_folder`), same division of
     #: labor as export_requested/launch_rvt_requested above.
     open_builtin_folder_requested = pyqtSignal(str)
 
-    #: PROMPT.md: "it should be possible to load in editor tab or in popout window" -- the Notepad
-    #: box's own two buttons (see :class:`~in_reach_ide.notepad.NotepadBox`); MainWindow owns
-    #: actually opening either.
+    #: The Notepad header's Open in Editor (see :class:`~in_reach_ide.notepad.NotepadBox`); MainWindow opens it.
     notepad_open_in_editor_requested = pyqtSignal()
-    notepad_open_in_window_requested = pyqtSignal()
     #: Emitted with the notepad file's path right after the box autosaves it.
     notepad_saved = pyqtSignal(Path)
 
@@ -469,12 +481,14 @@ class ExplorerPanel(QWidget):
         self.button_row = button_row
         quick_launch_layout.addWidget(self.button_row)
 
-        # PROMPT.md: "underneath that top row of buttons, we want a subheader saying 'Built-in' and
-        # buttons for: col a: Open Game Variants/Open Hopper Variants/Open User Games, col b: Open
-        # Map Variants/Open Hopper Maps/Open User Maps" -- each resolves the matching
-        # system_verify-checked folder against this window's own project-root .env (MainWindow owns
-        # the actual lookup+open, see open_builtin_folder_requested's own docstring).
-        quick_launch_layout.addWidget(_subheader("Built-in"))
+        self.quick_launch_section = _CollapsibleSection("Quick Launch", quick_launch_body, collapsed=False)
+        self.quick_launch_section.hide()
+        layout.addWidget(self.quick_launch_section)
+
+        # "Locations": the game's own folders (col a: Game Variants/Hopper Variants/User Games, col b: Map Variants/
+        # Hopper Maps/User Maps), In-Reach Maps and the hot-reload folder -- each resolves the matching
+        # system_verify-checked folder against this window's own project-root .env (MainWindow owns the actual
+        # lookup+open, see open_builtin_folder_requested's own docstring).
         self.game_variants_button = _folder_button("Open Game Variants")
         self.map_variants_button = _folder_button("Open Map Variants")
         self.hopper_variants_button = _folder_button("Open Hopper Variants")
@@ -504,27 +518,34 @@ class ExplorerPanel(QWidget):
         builtin_grid.addWidget(self.user_games_button, 2, 0)
         builtin_grid.addWidget(self.user_maps_button, 2, 1)
         builtin_grid.addWidget(self.inreach_maps_button, 3, 0, 1, 2)
-        builtin_grid_widget = QWidget()
-        builtin_grid_widget.setLayout(builtin_grid)
-        quick_launch_layout.addWidget(builtin_grid_widget)
-
-        # PROMPT.md: "then a subheader saying hot reload: col a: Open HotReload Folder".
-        quick_launch_layout.addWidget(_subheader("Hot Reload"))
-        self.hotreload_button = _folder_button("Open HotReload Folder")
+        self.hotreload_button = _folder_button("Open Hot Reload Folder")
         self.hotreload_button.clicked.connect(
             lambda: self.open_builtin_folder_requested.emit(system_verify.HOTRELOAD_KEY)
         )
-        quick_launch_layout.addWidget(self.hotreload_button)
+        builtin_grid.addWidget(self.hotreload_button, 4, 0, 1, 2)
+        locations_body = QWidget()
+        locations_body.setLayout(builtin_grid)
+        builtin_grid.setContentsMargins(0, 4, 0, 0)
+        self.locations_section = _CollapsibleSection("Locations", locations_body, collapsed=False)
+        self.locations_section.hide()
+        layout.addWidget(self.locations_section)
 
-        self.quick_launch_section = _CollapsibleSection("Quick Launch", quick_launch_body, collapsed=False)
-        self.quick_launch_section.hide()
-        layout.addWidget(self.quick_launch_section)
+        # Hot Reload Config: where hot-reload settings will go; nothing in it yet.
+        hot_reload_body = QWidget()
+        hot_reload_layout = QVBoxLayout(hot_reload_body)
+        hot_reload_layout.setContentsMargins(0, 4, 0, 0)
+        self.hot_reload_config_label = QLabel(HOT_RELOAD_CONFIG_PLACEHOLDER)
+        self.hot_reload_config_label.setEnabled(False)
+        hot_reload_layout.addWidget(self.hot_reload_config_label)
+        self.hot_reload_config_section = _CollapsibleSection("Hot Reload Config", hot_reload_body, collapsed=True)
+        self.hot_reload_config_section.hide()
+        layout.addWidget(self.hot_reload_config_section)
 
         # Dedicated quick-access box for the active project's own settings/ subfolder, open by
         # default since it's central to the active project. Hidden entirely with no project open
         # (see _activate()).
         self.settings_tree, self._settings_model = _new_tree()
-        self.settings_section = _CollapsibleSection("Settings", self.settings_tree, collapsed=False)
+        self.settings_section = _CollapsibleSection("RVT Settings", self.settings_tree, collapsed=False)
         self.settings_section.hide()
         layout.addWidget(self.settings_section)
 
@@ -533,13 +554,13 @@ class ExplorerPanel(QWidget):
         # vertical space (stretch 1) rather than a trailing addStretch() doing so, which is what
         # keeps it pinned to the bottom of the sidebar while the boxes above stay packed at the top.
         self.notepad = NotepadBox()
-        for button in (self.notepad.open_in_editor_button, self.notepad.open_in_window_button):
-            button.setAutoRaise(False)
-            button.setStyleSheet(_DASHBOARD_BUTTON_STYLE)
+        self.notepad.open_in_editor_button.setAutoRaise(False)
+        self.notepad.open_in_editor_button.setStyleSheet(_DASHBOARD_BUTTON_STYLE)
         self.notepad.open_in_editor_requested.connect(self.notepad_open_in_editor_requested.emit)
-        self.notepad.open_in_window_requested.connect(self.notepad_open_in_window_requested.emit)
         self.notepad.saved.connect(self.notepad_saved.emit)
-        self.notepad_section = _CollapsibleSection("Notepad", self.notepad, collapsed=False)
+        # Notes.txt is personal -- the project's .gitignore lists it and the shadow VCS skips it -- which the title says.
+        self.notepad_section = _CollapsibleSection(NOTEPAD_TITLE, self.notepad, collapsed=False)
+        self.notepad_section.add_header_widget(self.notepad.open_in_editor_button)
         self.notepad_section.hide()
         layout.addWidget(self.notepad_section, 1)
 
@@ -548,6 +569,21 @@ class ExplorerPanel(QWidget):
         )
 
         self.refresh_font_scale()
+
+    def progress_bars(self) -> list[QProgressBar]:
+        """Every Stats bar: the space used, then each count's."""
+        return [self.stats_progress, *(box.progress for box in self.findChildren(_StatBox))]
+
+    def refresh_progress_bars(self, palette: QPalette | None = None) -> None:
+        """(Re-)styles the Stats bars from ``palette`` (the application's by default -- a theme switch passes the new
+        theme's, before widgets have caught up) and sizes their text :data:`PROGRESS_TEXT_SHRINK_PT` below the panel's."""
+        palette = palette if palette is not None else QApplication.palette()
+        style = progress_bar_style(palette)
+        text_font = QFont(self.font())
+        text_font.setPointSizeF(max(6.0, text_font.pointSizeF() - PROGRESS_TEXT_SHRINK_PT))
+        for bar in self.progress_bars():
+            bar.setStyleSheet(style)
+            bar.setFont(text_font)
 
     def refresh_font_scale(self) -> None:
         """(Re-)applies :data:`TEXT_SCALE` on top of the app's current font.
@@ -566,11 +602,15 @@ class ExplorerPanel(QWidget):
         font.setPointSizeF(font.pointSizeF() * self.TEXT_SCALE)
         self.setFont(font)
 
+        self.refresh_progress_bars()
+
         header_font = QFont(font)
         header_font.setPointSizeF(font.pointSizeF() * self.HEADER_TEXT_SCALE)
         self.settings_section.set_header_font(header_font)
         self.stats_section.set_header_font(header_font)
         self.quick_launch_section.set_header_font(header_font)
+        self.locations_section.set_header_font(header_font)
+        self.hot_reload_config_section.set_header_font(header_font)
         self.notepad_section.set_header_font(header_font)
 
         settings_tree_font = QFont(font)
@@ -626,6 +666,8 @@ class ExplorerPanel(QWidget):
         self._no_project_label.setVisible(not has_project)
         self._no_project_spacer.setVisible(not has_project)
         self.quick_launch_section.setVisible(has_project)
+        self.locations_section.setVisible(has_project)
+        self.hot_reload_config_section.setVisible(has_project)
         self.settings_section.setVisible(has_project)
         self.notepad_section.setVisible(has_project)
         self.notepad.set_path(folder / new_project.NOTES_FILENAME if has_project else None)

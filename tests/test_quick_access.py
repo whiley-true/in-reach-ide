@@ -387,6 +387,7 @@ def test_build_command_palette_commands_offers_set_theme_and_set_ui_scale(projec
     assert labels == [
         "New Window",
         "Load Welcome Tab",
+        "Verify System Settings",
         "Open Folder",
         "Save",
         "Save All",
@@ -427,6 +428,8 @@ def test_build_command_palette_commands_offers_set_theme_and_set_ui_scale(projec
         "Link Script Project",
         "Convert to Project (experimental)",
         "Open Documentation Overview",
+        "Edit Script Readme",
+        "Preview Script Readme",
         "New Script Module",
         "Enable Script Module",
         "Disable Script Module",
@@ -452,6 +455,7 @@ def test_build_command_palette_commands_offers_set_theme_and_set_ui_scale(projec
         "Compare",
         "Export RVT File",
         "View Output.txt",
+        "Open Script",
         "View Decompiled",
     ]
     theme_command = next(c for c in commands if c.label == "Set Theme")

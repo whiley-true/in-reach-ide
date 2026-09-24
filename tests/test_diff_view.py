@@ -191,7 +191,7 @@ def test_json_file_gets_syntax_highlighting_on_both_panes(qtbot) -> None:
 
 
 def test_non_json_file_gets_no_syntax_highlighting(qtbot) -> None:
-    widget = DiffViewWidget(rel_path="script/output.txt", old_text="a", new_text="b")
+    widget = DiffViewWidget(rel_path="script/output.mgl", old_text="a", new_text="b")
     qtbot.addWidget(widget)
 
     assert widget.old_pane._highlighter is None

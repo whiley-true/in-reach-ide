@@ -50,6 +50,8 @@ _TITLE_HELP = f"1-{new_project.MAX_TITLE_LENGTH} characters."
 # variant (as at present they can fill the entire screen)" -- a project folder with a few hundred
 # .bin files would otherwise open a popup taller than the screen; this caps it to a scrollable list.
 _VARIANT_DROPDOWN_MAX_VISIBLE_ITEMS = 12
+#: The category a new project starts with (Firefight has none -- see NewProjectDialog.category).
+DEFAULT_CATEGORY = EngineCategory.slayer
 
 
 class NewProjectDialog(QDialog):
@@ -120,6 +122,9 @@ class NewProjectDialog(QDialog):
         self.category_combo = QComboBox()
         for category in EngineCategory:
             self.category_combo.addItem(display_name(category), category)
+        # Slayer unless another is chosen: the category is written into the game variant (see in_reach's
+        # decompile._with_engine_category), so the default should be a real one.
+        self.category_combo.setCurrentIndex(self.category_combo.findData(DEFAULT_CATEGORY))
         form.addRow("Category", self.category_combo)
 
         self.variant_combo = QComboBox()

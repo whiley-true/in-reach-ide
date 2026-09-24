@@ -49,3 +49,41 @@ def test_empty_text_has_no_folds() -> None:
 
 def test_a_single_line_document_has_no_folds() -> None:
     assert compute_fold_ranges('{"a": 1, "b": [1, 2, 3]}') == {}
+
+
+# -- Megalo -------------------------------------------------------------------------------------------------
+
+from in_reach_ide.code_folding import compute_megalo_fold_ranges  # noqa: E402
+
+_MEGALO = (
+    "on init: do\n"                          # 0
+    "   for each player do\n"                # 1
+    "      if current_player.score > 1 then\n"  # 2
+    "         game.end_round()\n"            # 3
+    "      altif current_player.score == 0 then\n"  # 4
+    "         x = 1\n"                       # 5
+    "      alt\n"                            # 6
+    "         x = 2\n"                       # 7
+    "      end\n"                            # 8
+    "   end\n"                               # 9
+    "end\n"                                  # 10
+)
+
+
+def test_megalo_blocks_fold_through_their_end() -> None:
+    assert compute_megalo_fold_ranges(_MEGALO) == {0: 10, 1: 9, 2: 8}  # altif/alt stay inside their if
+
+
+def test_megalo_words_in_strings_and_comments_dont_open_or_close_blocks() -> None:
+    text = 'do\n   x("the end") -- if this then do\n   y = 1\nend\n'
+    assert compute_megalo_fold_ranges(text) == {0: 3}
+
+
+def test_an_empty_or_unclosed_megalo_block_is_not_foldable() -> None:
+    assert compute_megalo_fold_ranges("do\nend\n") == {}
+    assert compute_megalo_fold_ranges("for each player do\n   x = 1\n") == {}
+    assert compute_megalo_fold_ranges("end\nend\n") == {}
+
+
+def test_a_function_folds() -> None:
+    assert compute_megalo_fold_ranges("function score_up()\n   x = 1\nend\n") == {0: 2}

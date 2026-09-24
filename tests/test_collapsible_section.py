@@ -54,3 +54,22 @@ def test_toggling_the_header_shows_and_hides_the_body(qtbot) -> None:
 
     section.set_expanded(True)
     assert body.isVisible() is True
+
+
+def test_building_a_section_never_shows_its_body_as_a_window_of_its_own(qtbot) -> None:
+    from PyQt6.QtWidgets import QLabel
+
+    from in_reach_ide.collapsible_section import CollapsibleSection
+
+    shown_parentless = []
+
+    class _Body(QLabel):
+        def setVisible(self, visible: bool) -> None:  # noqa: N802
+            if visible and self.parentWidget() is None:
+                shown_parentless.append(self)
+            super().setVisible(visible)
+
+    section = CollapsibleSection("S", _Body("body"), collapsed=False)
+    qtbot.addWidget(section)
+
+    assert shown_parentless == [] and section.body.parentWidget() is section

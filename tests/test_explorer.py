@@ -19,7 +19,7 @@ def panel(qtbot) -> ExplorerPanel:
 
 
 def test_settings_tree_has_no_default_frame_border(panel: ExplorerPanel) -> None:
-    # PROMPT.md: "please remove the bubble outline around ... setings, and output.txt" -- QTreeView
+    # PROMPT.md: "please remove the bubble outline around ... setings, and output.mgl" -- QTreeView
     # (like every QAbstractScrollArea) defaults to a sunken StyledPanel frame around itself.
     assert panel.settings_tree.frameShape() == QFrame.Shape.NoFrame
 
@@ -870,12 +870,13 @@ def test_builtin_buttons_are_laid_out_two_per_row(panel: ExplorerPanel) -> None:
     # PROMPT.md: "col a / col b" -- Game Variants/Map Variants, Hopper Variants/Hopper Maps, User
     # Games/User Maps, each pair sharing a row. A fourth row holds "Open In-Reach Maps" alone,
     # spanning both columns (PROMPT.md: "a button for In-Reach maps ... quick launch built-in
-    # buttons").
+    # buttons"), and a fifth "Open Hot Reload Folder", the same way.
     grid = panel.game_variants_button.parentWidget().layout()
-    assert grid.rowCount() == 4
+    assert grid.rowCount() == 5
     assert grid.columnCount() == 2
     position = grid.getItemPosition(grid.indexOf(panel.inreach_maps_button))
     assert position == (3, 0, 1, 2)
+    assert grid.getItemPosition(grid.indexOf(panel.hotreload_button)) == (4, 0, 1, 2)
 
 
 # -- heading/subheading emphasis (PROMPT.md: "please update dashbaord so headings are bold and
@@ -887,13 +888,65 @@ def test_section_headers_are_bold(panel: ExplorerPanel) -> None:
         assert section._toggle.font().bold() is True
 
 
-def test_subheaders_are_italic_not_bold(panel: ExplorerPanel) -> None:
-    labels = [
-        child
-        for child in panel.quick_launch_section.body.findChildren(QLabel)
-        if child.text() in ("Built-in", "Hot Reload")
-    ]
-    assert len(labels) == 2
-    for label in labels:
-        assert label.font().italic() is True
-        assert label.font().bold() is False
+def test_locations_and_hot_reload_config_are_their_own_sections(panel: ExplorerPanel, tmp_path: Path) -> None:
+    panel.open_project(tmp_path)
+    layout = panel.layout()
+    widgets = [layout.itemAt(i).widget() for i in range(layout.count()) if layout.itemAt(i).widget() is not None]
+
+    assert panel.locations_section._toggle.text() == "Locations"
+    assert panel.hot_reload_config_section._toggle.text() == "Hot Reload Config"
+    assert panel.hotreload_button.text() == "Open Hot Reload Folder"
+    assert panel.locations_section.body.isAncestorOf(panel.hotreload_button)
+    assert panel.locations_section.body.isAncestorOf(panel.game_variants_button)
+    assert not panel.quick_launch_section.body.isAncestorOf(panel.game_variants_button)
+    assert [label.text() for label in panel.quick_launch_section.body.findChildren(QLabel)] == []
+    order = [widgets.index(s) for s in (panel.quick_launch_section, panel.locations_section,
+                                          panel.hot_reload_config_section, panel.notepad_section)]
+    assert order == sorted(order)
+    assert panel.locations_section.isVisible() and panel.hot_reload_config_section.isVisible()
+    assert not panel.hot_reload_config_section.expanded
+
+
+# -- RVT Settings, and the Stats bars ---------------------------------------------------------------------------
+
+
+def test_the_settings_section_is_called_rvt_settings(panel: ExplorerPanel) -> None:
+    assert panel.settings_section.title == "RVT Settings"
+
+
+def _palette(highlight: str, base: str, text: str):
+    from PyQt6.QtGui import QColor, QPalette
+
+    palette = QPalette()
+    palette.setColor(QPalette.ColorRole.Highlight, QColor(highlight))
+    palette.setColor(QPalette.ColorRole.Base, QColor(base))
+    palette.setColor(QPalette.ColorRole.Text, QColor(text))
+    return palette
+
+
+@pytest.mark.parametrize("highlight,base,text", [("#308cc6", "#ffffff", "#000000"), ("#2a82da", "#1e1e1e", "#ffffff")])
+def test_the_stats_bars_fill_is_lighter_than_the_highlight_in_light_and_dark_themes(
+    panel: ExplorerPanel, highlight: str, base: str, text: str
+) -> None:
+    from PyQt6.QtGui import QColor
+
+    from in_reach_ide.explorer import progress_chunk_color
+
+    palette = _palette(highlight, base, text)
+    chunk = progress_chunk_color(palette)
+
+    assert chunk != QColor(highlight)
+    halfway = [(a + b) / 2 for a, b in zip(QColor(highlight).getRgb()[:3], QColor(base).getRgb()[:3])]
+    assert all(abs(c - h) <= 1 for c, h in zip(chunk.getRgb()[:3], halfway))
+    panel.refresh_progress_bars(palette)
+    assert all(chunk.name() in bar.styleSheet() for bar in panel.progress_bars())
+
+
+def test_the_stats_bars_text_is_smaller_than_the_panels(panel: ExplorerPanel) -> None:
+    from in_reach_ide.explorer import PROGRESS_TEXT_SHRINK_PT
+
+    panel.refresh_font_scale()
+
+    for bar in panel.progress_bars():
+        assert bar.font().pointSizeF() == pytest.approx(panel.font().pointSizeF() - PROGRESS_TEXT_SHRINK_PT)
+    assert len(panel.progress_bars()) >= 10  # the space bar and every count's

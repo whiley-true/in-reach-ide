@@ -1,4 +1,4 @@
-"""Syntax highlighting for Megalo script text: a project's ``.mgl`` blocks and modules, ``script/output.txt`` and the
+"""Syntax highlighting for Megalo script text: a project's ``.mgl`` blocks and modules, ``script/output.mgl`` and the
 generated ``build/Compiled.txt``.
 
 Line-based and regex-driven rather than built on :mod:`in_reach.app.rvt.megalo_ast`'s lexer: a half-typed script is the

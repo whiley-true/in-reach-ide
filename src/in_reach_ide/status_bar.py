@@ -102,7 +102,13 @@ class StatusBar(QWidget):
         # for why a bare one would risk quietly breaking any tooltip shown by something inside
         # this bar (nothing currently sets one here, but a bare rule is a landmine for the next
         # thing that does).
+        # Set afresh and re-polished every time: two themes can share a colour, and setting the same sheet again is a
+        # no-op that left the bar unpainted after a switch from a dark theme to a light one.
+        self.setStyleSheet("")
         self.setStyleSheet(f"QWidget#statusBar {{ background-color: {color_hex}; }}")
+        self.style().unpolish(self)
+        self.style().polish(self)
+        self.update()
 
     def set_vcs_status(
         self, branch: str, last_stamp: str | None, last_saved: str, *, on_click: Callable[[], None]

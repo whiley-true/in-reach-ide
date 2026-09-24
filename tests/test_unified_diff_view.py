@@ -84,7 +84,7 @@ def test_json_file_gets_syntax_highlighting(qtbot) -> None:
 
 
 def test_non_json_file_gets_no_syntax_highlighting(qtbot) -> None:
-    widget = UnifiedDiffViewWidget(rel_path="output.txt", sha="abcd1234", old_text="a", new_text="b")
+    widget = UnifiedDiffViewWidget(rel_path="output.mgl", sha="abcd1234", old_text="a", new_text="b")
     qtbot.addWidget(widget)
 
     assert widget.pane._highlighter is None

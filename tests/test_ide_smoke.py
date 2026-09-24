@@ -795,9 +795,20 @@ def test_explorer_button_is_labeled_and_iconed_as_dashboard(qtbot) -> None:
     bar = ActivityBar()
     qtbot.addWidget(bar)
 
-    assert bar.explorer_button.toolTip() == "Dashboard (toggle primary sidebar)"
+    assert bar.explorer_button.toolTip() == "Dashboard"
     expected = icons.icon("dashboard", color="#cccccc", size=28).pixmap(28, 28).toImage()
     assert bar.explorer_button.icon().pixmap(28, 28).toImage() == expected
+
+
+def test_side_panel_icons_hover_with_just_the_panels_name(qtbot) -> None:
+    from PyQt6.QtWidgets import QToolButton
+
+    bar = ActivityBar()
+    qtbot.addWidget(bar)
+
+    tips = [button.toolTip() for button in bar.findChildren(QToolButton) if button.toolTip()]
+    assert "Scripts" in tips and "Documentation" in tips
+    assert not any("toggle" in tip.lower() for tip in tips)
 
 
 def test_refresh_icon_scale_keeps_the_dashboard_icon_not_the_old_explorer_one(qtbot) -> None:
@@ -1782,8 +1793,11 @@ def test_clicking_apply_arms_the_bin_watcher_once_a_compiled_bin_first_exists(
 def _make_vcs_project(tmp_path: Path):
     from in_reach.app import vcs
 
+    from in_reach.app import new_project
+
     folder = _make_project_with_settings(tmp_path)
-    (folder / "Notes.txt").write_text("hi\n", encoding="utf-8")
+    (folder / "todo.txt").write_text("hi\n", encoding="utf-8")
+    new_project.ensure_gitignore(folder)  # as a new project has, so opening one adds nothing to commit
     vcs.init(folder)
     return folder, vcs
 
@@ -1829,13 +1843,13 @@ def test_saving_a_file_shows_up_as_uncommitted_rather_than_auto_committing(
     project_window._on_project_opened(folder)
     before = len(vcs.history(folder))
 
-    project_window.main_panel.active_pane.open_file(folder / "Notes.txt")
+    project_window.main_panel.active_pane.open_file(folder / "todo.txt")
     widget = project_window.main_panel.active_pane.widget(project_window.main_panel.active_pane.currentIndex())
     widget.setPlainText("edited\n")
     project_window.main_panel.active_pane.save_current()
 
     assert len(vcs.history(folder)) == before
-    assert [c.path for c in vcs.uncommitted_changes(folder)] == ["Notes.txt"]
+    assert [c.path for c in vcs.uncommitted_changes(folder)] == ["todo.txt"]
     assert project_window.activity_bar.git_button._badge_count == 1
     assert project_window.status_bar.vcs_label.text().startswith("main - not yet stamped - saved")
 
@@ -1853,13 +1867,13 @@ def test_saving_a_file_immediately_populates_the_git_panels_own_changes_list(
     project_window._on_project_opened(folder)
     assert project_window.git_panel.changes_list.count() == 0
 
-    project_window.main_panel.active_pane.open_file(folder / "Notes.txt")
+    project_window.main_panel.active_pane.open_file(folder / "todo.txt")
     widget = project_window.main_panel.active_pane.widget(project_window.main_panel.active_pane.currentIndex())
     widget.setPlainText("edited\n")
     project_window.main_panel.active_pane.save_current()
 
     assert project_window.git_panel.changes_list.count() == 1
-    assert project_window.git_panel.changes_list.item(0).text() == "M  Notes.txt"
+    assert project_window.git_panel.changes_list.item(0).text() == "M  todo.txt"
     assert project_window.git_panel.uncommitted_count == 1
     assert project_window.git_panel.commit_button.isEnabled() is False  # no message typed yet
 
@@ -1941,7 +1955,7 @@ def test_vcs_new_branch_from_branches_off_the_given_source_not_head(
     folder, vcs = _make_vcs_project(tmp_path)
     project_window._on_project_opened(folder)
     vcs.create_branch(folder, "feature")
-    (folder / "Notes.txt").write_text("feature content\n", encoding="utf-8")
+    (folder / "todo.txt").write_text("feature content\n", encoding="utf-8")
     vcs.stage_all(folder)
     vcs.commit(folder, "feature change")
     vcs.switch_branch(folder, vcs.DEFAULT_BRANCH)
@@ -1949,7 +1963,7 @@ def test_vcs_new_branch_from_branches_off_the_given_source_not_head(
     project_window.vcs_new_branch_from("from-feature", "feature")
 
     assert vcs.current_branch(folder) == "from-feature"
-    assert (folder / "Notes.txt").read_text(encoding="utf-8") == "feature content\n"
+    assert (folder / "todo.txt").read_text(encoding="utf-8") == "feature content\n"
     assert project_window.git_panel.branch_combo.currentText() == "from-feature"
 
 
@@ -1960,9 +1974,9 @@ def test_vcs_new_branch_from_with_no_project_open_is_a_no_op(window: MainWindow)
 def test_vcs_switch_branch_reloads_a_clean_open_tab_from_disk(project_window: MainWindow, tmp_path: Path) -> None:
     folder, vcs = _make_vcs_project(tmp_path)
     project_window._on_project_opened(folder)
-    project_window.main_panel.active_pane.open_file(folder / "Notes.txt")
+    project_window.main_panel.active_pane.open_file(folder / "todo.txt")
     vcs.create_branch(folder, "feature")
-    (folder / "Notes.txt").write_text("feature branch content\n", encoding="utf-8")
+    (folder / "todo.txt").write_text("feature branch content\n", encoding="utf-8")
     vcs.stage_all(folder)
     vcs.commit(folder, "feature branch content")
 
@@ -1980,7 +1994,7 @@ def test_vcs_switch_branch_warns_before_overwriting_an_unsaved_open_tab(
     project_window._on_project_opened(folder)
     vcs.create_branch(folder, "feature")
     vcs.switch_branch(folder, vcs.DEFAULT_BRANCH)  # create_branch() itself already switches
-    project_window.main_panel.active_pane.open_file(folder / "Notes.txt")
+    project_window.main_panel.active_pane.open_file(folder / "todo.txt")
     widget = project_window.main_panel.active_pane.widget(project_window.main_panel.active_pane.currentIndex())
     widget.setPlainText("unsaved edit")
     widget.document().setModified(True)
@@ -1991,7 +2005,7 @@ def test_vcs_switch_branch_warns_before_overwriting_an_unsaved_open_tab(
 
     project_window.vcs_switch_branch("feature")
 
-    assert warned == [["Notes.txt"]]
+    assert warned == [["todo.txt"]]
     assert vcs.current_branch(folder) == vcs.DEFAULT_BRANCH  # switch refused, still on main
 
 
@@ -2002,7 +2016,7 @@ def test_vcs_switch_branch_proceeds_once_confirmed_despite_the_dirty_tab(
     project_window._on_project_opened(folder)
     vcs.create_branch(folder, "feature")
     vcs.switch_branch(folder, vcs.DEFAULT_BRANCH)  # create_branch() itself already switches
-    project_window.main_panel.active_pane.open_file(folder / "Notes.txt")
+    project_window.main_panel.active_pane.open_file(folder / "todo.txt")
     widget = project_window.main_panel.active_pane.widget(project_window.main_panel.active_pane.currentIndex())
     widget.setPlainText("unsaved edit")
     widget.document().setModified(True)
@@ -2029,7 +2043,7 @@ def test_vcs_switch_branch_warns_about_uncommitted_changes_and_can_be_cancelled(
     project_window._on_project_opened(folder)
     vcs.create_branch(folder, "feature")
     vcs.switch_branch(folder, vcs.DEFAULT_BRANCH)
-    (folder / "Notes.txt").write_text("uncommitted edit\n", encoding="utf-8")
+    (folder / "todo.txt").write_text("uncommitted edit\n", encoding="utf-8")
     warned = []
     monkeypatch.setattr(
         MainWindow, "_confirm_uncommitted_before_switch", lambda self, paths: warned.append(paths) or "cancel"
@@ -2037,9 +2051,9 @@ def test_vcs_switch_branch_warns_about_uncommitted_changes_and_can_be_cancelled(
 
     project_window.vcs_switch_branch("feature")
 
-    assert warned == [["Notes.txt"]]
+    assert warned == [["todo.txt"]]
     assert vcs.current_branch(folder) == vcs.DEFAULT_BRANCH  # switch refused, still on main
-    assert (folder / "Notes.txt").read_text(encoding="utf-8") == "uncommitted edit\n"  # never overwritten
+    assert (folder / "todo.txt").read_text(encoding="utf-8") == "uncommitted edit\n"  # never overwritten
 
 
 def test_vcs_switch_branch_commits_first_when_chosen(
@@ -2049,7 +2063,7 @@ def test_vcs_switch_branch_commits_first_when_chosen(
     project_window._on_project_opened(folder)
     vcs.create_branch(folder, "feature")
     vcs.switch_branch(folder, vcs.DEFAULT_BRANCH)
-    (folder / "Notes.txt").write_text("uncommitted edit\n", encoding="utf-8")
+    (folder / "todo.txt").write_text("uncommitted edit\n", encoding="utf-8")
     monkeypatch.setattr(MainWindow, "_confirm_uncommitted_before_switch", lambda self, paths: "commit")
     monkeypatch.setattr(MainWindow, "_ask_commit_message", lambda self: "save my edit")
 
@@ -2067,7 +2081,7 @@ def test_vcs_switch_branch_cancels_if_the_commit_message_prompt_is_cancelled(
     project_window._on_project_opened(folder)
     vcs.create_branch(folder, "feature")
     vcs.switch_branch(folder, vcs.DEFAULT_BRANCH)
-    (folder / "Notes.txt").write_text("uncommitted edit\n", encoding="utf-8")
+    (folder / "todo.txt").write_text("uncommitted edit\n", encoding="utf-8")
     monkeypatch.setattr(MainWindow, "_confirm_uncommitted_before_switch", lambda self, paths: "commit")
     monkeypatch.setattr(MainWindow, "_ask_commit_message", lambda self: "")
 
@@ -2084,13 +2098,13 @@ def test_vcs_switch_branch_discards_uncommitted_changes_when_chosen(
     project_window._on_project_opened(folder)
     vcs.create_branch(folder, "feature")
     vcs.switch_branch(folder, vcs.DEFAULT_BRANCH)
-    (folder / "Notes.txt").write_text("uncommitted edit\n", encoding="utf-8")
+    (folder / "todo.txt").write_text("uncommitted edit\n", encoding="utf-8")
     monkeypatch.setattr(MainWindow, "_confirm_uncommitted_before_switch", lambda self, paths: "discard")
 
     project_window.vcs_switch_branch("feature")
 
     assert vcs.current_branch(folder) == "feature"
-    assert (folder / "Notes.txt").read_text(encoding="utf-8") == "hi\n"  # overwritten by the switch
+    assert (folder / "todo.txt").read_text(encoding="utf-8") == "hi\n"  # overwritten by the switch
 
 
 def test_commit_command_prompts_and_commits(
@@ -2100,7 +2114,7 @@ def test_commit_command_prompts_and_commits(
 
     folder, vcs = _make_vcs_project(tmp_path)
     project_window._on_project_opened(folder)
-    (folder / "Notes.txt").write_text("edited\n", encoding="utf-8")
+    (folder / "todo.txt").write_text("edited\n", encoding="utf-8")
     vcs.stage_all(folder)
     monkeypatch.setattr(QInputDialog, "getText", staticmethod(lambda *a, **k: ("edit notes", True)))
 
@@ -2118,7 +2132,7 @@ def test_commit_command_does_nothing_when_cancelled(
 
     folder, vcs = _make_vcs_project(tmp_path)
     project_window._on_project_opened(folder)
-    (folder / "Notes.txt").write_text("edited\n", encoding="utf-8")
+    (folder / "todo.txt").write_text("edited\n", encoding="utf-8")
     monkeypatch.setattr(QInputDialog, "getText", staticmethod(lambda *a, **k: ("", False)))
 
     commands = project_window.build_command_palette_commands()
@@ -2183,7 +2197,7 @@ def test_new_branch_from_command_lists_branches_and_stamps_and_creates(
     folder, vcs = _make_vcs_project(tmp_path)
     project_window._on_project_opened(folder)
     vcs.create_branch(folder, "feature")
-    (folder / "Notes.txt").write_text("feature content\n", encoding="utf-8")
+    (folder / "todo.txt").write_text("feature content\n", encoding="utf-8")
     vcs.stage_all(folder)
     vcs.commit(folder, "feature change")
     vcs.stamp(folder, "a release", version="1.0.0")
@@ -2202,7 +2216,7 @@ def test_new_branch_from_command_lists_branches_and_stamps_and_creates(
     next(c for c in new_branch_from_command.children if c.label == vcs.DEFAULT_BRANCH).action()
 
     assert vcs.current_branch(folder) == "from-main"
-    assert (folder / "Notes.txt").read_text(encoding="utf-8") == "hi\n"
+    assert (folder / "todo.txt").read_text(encoding="utf-8") == "hi\n"
 
 
 def test_switch_branch_command_lists_and_switches_branches(project_window: MainWindow, tmp_path: Path) -> None:
@@ -2255,14 +2269,14 @@ def test_vcs_merge_branch_fast_forwards_and_refreshes_the_ui(project_window: Mai
     folder, vcs = _make_vcs_project(tmp_path)
     project_window._on_project_opened(folder)
     vcs.create_branch(folder, "feature")
-    (folder / "Notes.txt").write_text("from feature\n", encoding="utf-8")
+    (folder / "todo.txt").write_text("from feature\n", encoding="utf-8")
     vcs.stage_all(folder)
     vcs.commit(folder, "feature change")
     vcs.switch_branch(folder, vcs.DEFAULT_BRANCH)
 
     project_window.vcs_merge_branch("feature")
 
-    assert (folder / "Notes.txt").read_text(encoding="utf-8") == "from feature\n"
+    assert (folder / "todo.txt").read_text(encoding="utf-8") == "from feature\n"
     assert vcs.current_branch(folder) == vcs.DEFAULT_BRANCH
     assert project_window.git_panel.uncommitted_count == 0
 
@@ -2275,7 +2289,7 @@ def test_vcs_merge_branch_creates_a_two_parent_commit(project_window: MainWindow
     vcs.stage_all(folder)
     feature_sha = vcs.commit(folder, "feature change")
     vcs.switch_branch(folder, vcs.DEFAULT_BRANCH)
-    (folder / "Notes.txt").write_text("from main\n", encoding="utf-8")
+    (folder / "todo.txt").write_text("from main\n", encoding="utf-8")
     vcs.stage_all(folder)
     main_sha = vcs.commit(folder, "main change")
 
@@ -2284,7 +2298,7 @@ def test_vcs_merge_branch_creates_a_two_parent_commit(project_window: MainWindow
     merge_commit = vcs.graph_history(folder)[0]
     assert sorted(merge_commit.parents) == sorted([main_sha, feature_sha])
     assert (folder / "feature.txt").read_text(encoding="utf-8") == "from feature\n"
-    assert (folder / "Notes.txt").read_text(encoding="utf-8") == "from main\n"
+    assert (folder / "todo.txt").read_text(encoding="utf-8") == "from main\n"
 
 
 def test_vcs_merge_branch_reports_a_conflict_rather_than_crashing(
@@ -2293,11 +2307,11 @@ def test_vcs_merge_branch_reports_a_conflict_rather_than_crashing(
     folder, vcs = _make_vcs_project(tmp_path)
     project_window._on_project_opened(folder)
     vcs.create_branch(folder, "feature")
-    (folder / "Notes.txt").write_text("from feature\n", encoding="utf-8")
+    (folder / "todo.txt").write_text("from feature\n", encoding="utf-8")
     vcs.stage_all(folder)
     vcs.commit(folder, "feature change")
     vcs.switch_branch(folder, vcs.DEFAULT_BRANCH)
-    (folder / "Notes.txt").write_text("from main\n", encoding="utf-8")
+    (folder / "todo.txt").write_text("from main\n", encoding="utf-8")
     vcs.stage_all(folder)
     vcs.commit(folder, "main change")
     errors = []
@@ -2306,7 +2320,7 @@ def test_vcs_merge_branch_reports_a_conflict_rather_than_crashing(
     project_window.vcs_merge_branch("feature")
 
     assert len(errors) == 1
-    assert "Notes.txt" in errors[0]
+    assert "todo.txt" in errors[0]
     assert vcs.current_branch(folder) == vcs.DEFAULT_BRANCH  # merge refused, nothing committed
 
 
@@ -2317,7 +2331,7 @@ def test_vcs_merge_branch_warns_before_overwriting_an_unsaved_open_tab(
     project_window._on_project_opened(folder)
     vcs.create_branch(folder, "feature")
     vcs.switch_branch(folder, vcs.DEFAULT_BRANCH)  # create_branch() itself already switches
-    project_window.main_panel.active_pane.open_file(folder / "Notes.txt")
+    project_window.main_panel.active_pane.open_file(folder / "todo.txt")
     widget = project_window.main_panel.active_pane.widget(project_window.main_panel.active_pane.currentIndex())
     widget.setPlainText("unsaved edit")
     widget.document().setModified(True)
@@ -2328,7 +2342,7 @@ def test_vcs_merge_branch_warns_before_overwriting_an_unsaved_open_tab(
 
     project_window.vcs_merge_branch("feature")
 
-    assert warned == [["Notes.txt"]]
+    assert warned == [["todo.txt"]]
 
 
 def test_vcs_merge_branch_warns_about_uncommitted_changes_and_can_be_cancelled(
@@ -2338,7 +2352,7 @@ def test_vcs_merge_branch_warns_about_uncommitted_changes_and_can_be_cancelled(
     project_window._on_project_opened(folder)
     vcs.create_branch(folder, "feature")
     vcs.switch_branch(folder, vcs.DEFAULT_BRANCH)  # create_branch() itself already switches
-    (folder / "Notes.txt").write_text("uncommitted edit\n", encoding="utf-8")
+    (folder / "todo.txt").write_text("uncommitted edit\n", encoding="utf-8")
     warned = []
     monkeypatch.setattr(
         MainWindow, "_confirm_uncommitted_before_switch", lambda self, paths: warned.append(paths) or "cancel"
@@ -2346,8 +2360,8 @@ def test_vcs_merge_branch_warns_about_uncommitted_changes_and_can_be_cancelled(
 
     project_window.vcs_merge_branch("feature")
 
-    assert warned == [["Notes.txt"]]
-    assert (folder / "Notes.txt").read_text(encoding="utf-8") == "uncommitted edit\n"  # never overwritten
+    assert warned == [["todo.txt"]]
+    assert (folder / "todo.txt").read_text(encoding="utf-8") == "uncommitted edit\n"  # never overwritten
 
 
 def test_vcs_merge_branch_with_no_project_open_is_a_no_op(window: MainWindow) -> None:
@@ -2362,7 +2376,7 @@ def test_vcs_compare_opens_a_diff_dialog_listing_the_changed_files(
     folder, vcs = _make_vcs_project(tmp_path)
     project_window._on_project_opened(folder)
     vcs.create_branch(folder, "feature")
-    (folder / "Notes.txt").write_text("hi\nmore\n", encoding="utf-8")
+    (folder / "todo.txt").write_text("hi\nmore\n", encoding="utf-8")
     vcs.stage_all(folder)
     vcs.commit(folder, "edit notes")
     vcs.switch_branch(folder, vcs.DEFAULT_BRANCH)
@@ -2375,7 +2389,7 @@ def test_vcs_compare_opens_a_diff_dialog_listing_the_changed_files(
     assert len(opened) == 1
     dialog = opened[0]
     assert dialog.windowTitle() == "main vs. feature"
-    assert [dialog.file_list.item(i).text() for i in range(dialog.file_list.count())] == ["M Notes.txt"]
+    assert [dialog.file_list.item(i).text() for i in range(dialog.file_list.count())] == ["M todo.txt"]
 
 
 def test_vcs_open_diff_opens_a_diff_view_tab_for_the_uncommitted_change(
@@ -2385,14 +2399,14 @@ def test_vcs_open_diff_opens_a_diff_view_tab_for_the_uncommitted_change(
 
     folder, vcs = _make_vcs_project(tmp_path)
     project_window._on_project_opened(folder)
-    (folder / "Notes.txt").write_text("hi\nedited\n", encoding="utf-8")
+    (folder / "todo.txt").write_text("hi\nedited\n", encoding="utf-8")
 
-    project_window.vcs_open_diff("Notes.txt")
+    project_window.vcs_open_diff("todo.txt")
 
     pane = project_window.main_panel.active_pane
     widget = pane.widget(pane.currentIndex())
     assert isinstance(widget, DiffViewWidget)
-    assert widget.rel_path == "Notes.txt"
+    assert widget.rel_path == "todo.txt"
     # old_pane's own second line is a blank alignment filler, not a real line of "hi\n"'s own
     # content -- new_pane's "edited" line has nothing to line up with on the old side, so _align()
     # pads old_pane with a blank row to keep both sides vertically aligned row-for-row.
@@ -2401,7 +2415,7 @@ def test_vcs_open_diff_opens_a_diff_view_tab_for_the_uncommitted_change(
 
 
 def test_vcs_open_diff_with_no_project_open_is_a_no_op(window: MainWindow) -> None:
-    window.vcs_open_diff("Notes.txt")  # should not raise
+    window.vcs_open_diff("todo.txt")  # should not raise
 
 
 def test_clicking_a_changed_file_in_the_git_panel_opens_its_diff_tab(
@@ -2411,7 +2425,7 @@ def test_clicking_a_changed_file_in_the_git_panel_opens_its_diff_tab(
 
     folder, vcs = _make_vcs_project(tmp_path)
     project_window._on_project_opened(folder)
-    (folder / "Notes.txt").write_text("hi\nedited\n", encoding="utf-8")
+    (folder / "todo.txt").write_text("hi\nedited\n", encoding="utf-8")
     project_window.git_panel.refresh()
 
     project_window.git_panel.changes_list.itemClicked.emit(project_window.git_panel.changes_list.item(0))
@@ -2419,7 +2433,7 @@ def test_clicking_a_changed_file_in_the_git_panel_opens_its_diff_tab(
     pane = project_window.main_panel.active_pane
     widget = pane.widget(pane.currentIndex())
     assert isinstance(widget, DiffViewWidget)
-    assert widget.rel_path == "Notes.txt"
+    assert widget.rel_path == "todo.txt"
 
 
 # -- Changes context-menu actions (PROMPT.md: "in the changes it should be possible to right click
@@ -2430,9 +2444,9 @@ def test_clicking_a_changed_file_in_the_git_panel_opens_its_diff_tab(
 def test_vcs_open_file_opens_a_real_editable_tab(project_window: MainWindow, tmp_path: Path) -> None:
     folder, vcs = _make_vcs_project(tmp_path)
     project_window._on_project_opened(folder)
-    (folder / "Notes.txt").write_text("hi\nedited\n", encoding="utf-8")
+    (folder / "todo.txt").write_text("hi\nedited\n", encoding="utf-8")
 
-    project_window.vcs_open_file("Notes.txt")
+    project_window.vcs_open_file("todo.txt")
 
     pane = project_window.main_panel.active_pane
     widget = pane.widget(pane.currentIndex())
@@ -2441,7 +2455,7 @@ def test_vcs_open_file_opens_a_real_editable_tab(project_window: MainWindow, tmp
 
 
 def test_vcs_open_file_with_no_project_open_is_a_no_op(window: MainWindow) -> None:
-    window.vcs_open_file("Notes.txt")  # should not raise
+    window.vcs_open_file("todo.txt")  # should not raise
 
 
 def test_vcs_open_file_head_opens_a_read_only_tab_with_the_committed_content(
@@ -2449,9 +2463,9 @@ def test_vcs_open_file_head_opens_a_read_only_tab_with_the_committed_content(
 ) -> None:
     folder, vcs = _make_vcs_project(tmp_path)
     project_window._on_project_opened(folder)
-    (folder / "Notes.txt").write_text("hi\nedited\n", encoding="utf-8")
+    (folder / "todo.txt").write_text("hi\nedited\n", encoding="utf-8")
 
-    project_window.vcs_open_file_head("Notes.txt")
+    project_window.vcs_open_file_head("todo.txt")
 
     pane = project_window.main_panel.active_pane
     widget = pane.widget(pane.currentIndex())
@@ -2476,7 +2490,7 @@ def test_vcs_open_file_head_reports_when_there_is_no_head_version(
 
 
 def test_vcs_open_file_head_with_no_project_open_is_a_no_op(window: MainWindow) -> None:
-    window.vcs_open_file_head("Notes.txt")  # should not raise
+    window.vcs_open_file_head("todo.txt")  # should not raise
 
 
 def test_vcs_discard_reverts_the_file_after_confirming(
@@ -2484,12 +2498,12 @@ def test_vcs_discard_reverts_the_file_after_confirming(
 ) -> None:
     folder, vcs = _make_vcs_project(tmp_path)
     project_window._on_project_opened(folder)
-    (folder / "Notes.txt").write_text("edited\n", encoding="utf-8")
+    (folder / "todo.txt").write_text("edited\n", encoding="utf-8")
     monkeypatch.setattr(MainWindow, "_confirm_discard", lambda self, rel_path: True)
 
-    project_window.vcs_discard("Notes.txt")
+    project_window.vcs_discard("todo.txt")
 
-    assert (folder / "Notes.txt").read_text(encoding="utf-8") == "hi\n"
+    assert (folder / "todo.txt").read_text(encoding="utf-8") == "hi\n"
     assert vcs.uncommitted_changes(folder) == []
 
 
@@ -2498,12 +2512,12 @@ def test_vcs_discard_does_nothing_when_not_confirmed(
 ) -> None:
     folder, vcs = _make_vcs_project(tmp_path)
     project_window._on_project_opened(folder)
-    (folder / "Notes.txt").write_text("edited\n", encoding="utf-8")
+    (folder / "todo.txt").write_text("edited\n", encoding="utf-8")
     monkeypatch.setattr(MainWindow, "_confirm_discard", lambda self, rel_path: False)
 
-    project_window.vcs_discard("Notes.txt")
+    project_window.vcs_discard("todo.txt")
 
-    assert (folder / "Notes.txt").read_text(encoding="utf-8") == "edited\n"
+    assert (folder / "todo.txt").read_text(encoding="utf-8") == "edited\n"
 
 
 def test_vcs_discard_reloads_an_already_open_tab(
@@ -2511,18 +2525,18 @@ def test_vcs_discard_reloads_an_already_open_tab(
 ) -> None:
     folder, vcs = _make_vcs_project(tmp_path)
     project_window._on_project_opened(folder)
-    project_window.main_panel.active_pane.open_file(folder / "Notes.txt")
-    (folder / "Notes.txt").write_text("edited\n", encoding="utf-8")
+    project_window.main_panel.active_pane.open_file(folder / "todo.txt")
+    (folder / "todo.txt").write_text("edited\n", encoding="utf-8")
     monkeypatch.setattr(MainWindow, "_confirm_discard", lambda self, rel_path: True)
 
-    project_window.vcs_discard("Notes.txt")
+    project_window.vcs_discard("todo.txt")
 
     widget = project_window.main_panel.active_pane.widget(project_window.main_panel.active_pane.currentIndex())
     assert widget.toPlainText() == "hi\n"
 
 
 def test_vcs_discard_with_no_project_open_is_a_no_op(window: MainWindow) -> None:
-    window.vcs_discard("Notes.txt")  # should not raise
+    window.vcs_discard("todo.txt")  # should not raise
 
 
 def test_vcs_reveal_in_explorer_calls_the_os_explorer(
@@ -2533,45 +2547,45 @@ def test_vcs_reveal_in_explorer_calls_the_os_explorer(
     calls = []
     monkeypatch.setattr("subprocess.run", lambda *a, **k: calls.append(a))
 
-    project_window.vcs_reveal_in_explorer("Notes.txt")
+    project_window.vcs_reveal_in_explorer("todo.txt")
 
     assert len(calls) == 1
-    assert str(folder / "Notes.txt") in calls[0][0]
+    assert str(folder / "todo.txt") in calls[0][0]
 
 
 def test_vcs_reveal_in_explorer_with_no_project_open_is_a_no_op(window: MainWindow) -> None:
-    window.vcs_reveal_in_explorer("Notes.txt")  # should not raise
+    window.vcs_reveal_in_explorer("todo.txt")  # should not raise
 
 
 def test_vcs_stage_adds_paths_to_the_staging_area(project_window: MainWindow, tmp_path: Path) -> None:
     folder, vcs = _make_vcs_project(tmp_path)
     project_window._on_project_opened(folder)
-    (folder / "Notes.txt").write_text("edited\n", encoding="utf-8")
+    (folder / "todo.txt").write_text("edited\n", encoding="utf-8")
 
-    project_window.vcs_stage(["Notes.txt"])
+    project_window.vcs_stage(["todo.txt"])
 
-    assert vcs.staged_paths(folder) == {"Notes.txt"}
+    assert vcs.staged_paths(folder) == {"todo.txt"}
     assert project_window.git_panel.staged_list.count() == 1
 
 
 def test_vcs_stage_with_no_project_open_is_a_no_op(window: MainWindow) -> None:
-    window.vcs_stage(["Notes.txt"])  # should not raise
+    window.vcs_stage(["todo.txt"])  # should not raise
 
 
 def test_vcs_unstage_removes_paths_from_the_staging_area(project_window: MainWindow, tmp_path: Path) -> None:
     folder, vcs = _make_vcs_project(tmp_path)
     project_window._on_project_opened(folder)
-    (folder / "Notes.txt").write_text("edited\n", encoding="utf-8")
+    (folder / "todo.txt").write_text("edited\n", encoding="utf-8")
     vcs.stage_all(folder)
 
-    project_window.vcs_unstage(["Notes.txt"])
+    project_window.vcs_unstage(["todo.txt"])
 
     assert vcs.staged_paths(folder) == set()
     assert project_window.git_panel.changes_list.count() == 1
 
 
 def test_vcs_unstage_with_no_project_open_is_a_no_op(window: MainWindow) -> None:
-    window.vcs_unstage(["Notes.txt"])  # should not raise
+    window.vcs_unstage(["todo.txt"])  # should not raise
 
 
 # -- committing uncompiled changes (PROMPT.md: "please also give the user a warning if they are
@@ -2586,7 +2600,7 @@ def test_vcs_commit_warns_when_settings_have_unapplied_changes(
     (folder / "settings" / "settings.json").write_text('{"a": 1}', encoding="utf-8")
     (folder / "build" / "settings.autogenerated.json").write_text('{"a": 0}', encoding="utf-8")
     project_window._on_project_opened(folder)
-    (folder / "Notes.txt").write_text("edited\n", encoding="utf-8")
+    (folder / "todo.txt").write_text("edited\n", encoding="utf-8")
     vcs.stage_all(folder)
     warned = []
     monkeypatch.setattr(MainWindow, "_confirm_commit_uncompiled", lambda self: warned.append(1) or "cancel")
@@ -2605,8 +2619,8 @@ def test_vcs_commit_proceeds_when_chosen_commit_anyway(
     (folder / "settings" / "settings.json").write_text('{"a": 1}', encoding="utf-8")
     (folder / "build" / "settings.autogenerated.json").write_text('{"a": 0}', encoding="utf-8")
     project_window._on_project_opened(folder)
-    (folder / "Notes.txt").write_text("edited\n", encoding="utf-8")
-    vcs.stage(folder, ["Notes.txt"])
+    (folder / "todo.txt").write_text("edited\n", encoding="utf-8")
+    vcs.stage(folder, ["todo.txt"])
     monkeypatch.setattr(MainWindow, "_confirm_commit_uncompiled", lambda self: "commit")
 
     project_window.vcs_commit("edit notes anyway")
@@ -2617,7 +2631,7 @@ def test_vcs_commit_proceeds_when_chosen_commit_anyway(
 def test_vcs_commit_does_not_warn_when_nothing_is_unapplied(project_window: MainWindow, tmp_path: Path) -> None:
     folder, vcs = _make_vcs_project(tmp_path)
     project_window._on_project_opened(folder)
-    (folder / "Notes.txt").write_text("edited\n", encoding="utf-8")
+    (folder / "todo.txt").write_text("edited\n", encoding="utf-8")
     vcs.stage_all(folder)
 
     project_window.vcs_commit("edit notes")  # should not raise or block -- nothing unapplied
@@ -2657,17 +2671,17 @@ def test_vcs_open_commit_diff_opens_a_unified_diff_tab(project_window: MainWindo
     project_window._on_project_opened(folder)
     root_sha = vcs.history(folder)[0].sha
 
-    project_window.vcs_open_commit_diff(root_sha, "Notes.txt")
+    project_window.vcs_open_commit_diff(root_sha, "todo.txt")
 
     pane = project_window.main_panel.active_pane
     widget = pane.widget(pane.currentIndex())
     assert isinstance(widget, UnifiedDiffViewWidget)
-    assert widget.rel_path == "Notes.txt"
+    assert widget.rel_path == "todo.txt"
     assert widget.sha == root_sha
 
 
 def test_vcs_open_commit_diff_with_no_project_open_is_a_no_op(window: MainWindow) -> None:
-    window.vcs_open_commit_diff("deadbeef", "Notes.txt")  # should not raise
+    window.vcs_open_commit_diff("deadbeef", "todo.txt")  # should not raise
 
 
 def test_vcs_open_commit_file_opens_a_read_only_tab(project_window: MainWindow, tmp_path: Path) -> None:
@@ -2675,7 +2689,7 @@ def test_vcs_open_commit_file_opens_a_read_only_tab(project_window: MainWindow, 
     project_window._on_project_opened(folder)
     root_sha = vcs.history(folder)[0].sha
 
-    project_window.vcs_open_commit_file(root_sha, "Notes.txt")
+    project_window.vcs_open_commit_file(root_sha, "todo.txt")
 
     pane = project_window.main_panel.active_pane
     widget = pane.widget(pane.currentIndex())
@@ -2700,7 +2714,7 @@ def test_vcs_open_commit_file_reports_when_the_file_did_not_exist_yet(
 
 
 def test_vcs_open_commit_file_with_no_project_open_is_a_no_op(window: MainWindow) -> None:
-    window.vcs_open_commit_file("deadbeef", "Notes.txt")  # should not raise
+    window.vcs_open_commit_file("deadbeef", "todo.txt")  # should not raise
 
 
 def test_vcs_compare_labels_a_stamp_ref_with_its_message(
@@ -2711,7 +2725,7 @@ def test_vcs_compare_labels_a_stamp_ref_with_its_message(
     folder, vcs = _make_vcs_project(tmp_path)
     project_window._on_project_opened(folder)
     first = vcs.stamp(folder, "v1")
-    (folder / "Notes.txt").write_text("changed\n", encoding="utf-8")
+    (folder / "todo.txt").write_text("changed\n", encoding="utf-8")
     second = vcs.stamp(folder, "v2")
 
     opened = []
@@ -2745,13 +2759,13 @@ def test_vcs_restore_brings_back_old_content_and_records_a_new_snapshot(
     folder, vcs = _make_vcs_project(tmp_path)
     project_window._on_project_opened(folder)
     first = vcs.stamp(folder, "v1")
-    (folder / "Notes.txt").write_text("changed\n", encoding="utf-8")
+    (folder / "todo.txt").write_text("changed\n", encoding="utf-8")
     vcs.stamp(folder, "v2")
     before = len(vcs.history(folder))
 
     project_window.vcs_restore(first)
 
-    assert (folder / "Notes.txt").read_text(encoding="utf-8") == "hi\n"
+    assert (folder / "todo.txt").read_text(encoding="utf-8") == "hi\n"
     assert len(vcs.history(folder)) == before + 1
 
 
@@ -2759,8 +2773,8 @@ def test_vcs_restore_reloads_a_clean_open_tab_from_disk(project_window: MainWind
     folder, vcs = _make_vcs_project(tmp_path)
     project_window._on_project_opened(folder)
     first = vcs.stamp(folder, "v1")
-    project_window.main_panel.active_pane.open_file(folder / "Notes.txt")
-    (folder / "Notes.txt").write_text("changed\n", encoding="utf-8")
+    project_window.main_panel.active_pane.open_file(folder / "todo.txt")
+    (folder / "todo.txt").write_text("changed\n", encoding="utf-8")
     vcs.stamp(folder, "v2")
 
     project_window.vcs_restore(first)
@@ -2775,7 +2789,7 @@ def test_vcs_restore_warns_before_overwriting_an_unsaved_open_tab(
     folder, vcs = _make_vcs_project(tmp_path)
     project_window._on_project_opened(folder)
     first = vcs.stamp(folder, "v1")
-    project_window.main_panel.active_pane.open_file(folder / "Notes.txt")
+    project_window.main_panel.active_pane.open_file(folder / "todo.txt")
     widget = project_window.main_panel.active_pane.widget(project_window.main_panel.active_pane.currentIndex())
     widget.setPlainText("unsaved edit")
     widget.document().setModified(True)
@@ -2785,7 +2799,7 @@ def test_vcs_restore_warns_before_overwriting_an_unsaved_open_tab(
 
     project_window.vcs_restore(first)
 
-    assert warned == [["Notes.txt"]]
+    assert warned == [["todo.txt"]]
     assert len(vcs.history(folder)) == before  # refused -- nothing restored
 
 
@@ -2842,14 +2856,14 @@ def test_restore_snapshot_command_lists_stamps_and_autosaves_and_restores(
     folder, vcs = _make_vcs_project(tmp_path)
     project_window._on_project_opened(folder)
     first = vcs.stamp(folder, "v1")
-    (folder / "Notes.txt").write_text("changed\n", encoding="utf-8")
+    (folder / "todo.txt").write_text("changed\n", encoding="utf-8")
     vcs.stamp(folder, "v2")
 
     commands = project_window.build_command_palette_commands()
     restore_command = next(c for c in commands if c.label == "Restore Snapshot")
     next(c for c in restore_command.children if c.label == "v1").action()
 
-    assert (folder / "Notes.txt").read_text(encoding="utf-8") == "hi\n"
+    assert (folder / "todo.txt").read_text(encoding="utf-8") == "hi\n"
 
 
 def test_compare_command_offers_a_two_level_pick_and_opens_the_diff_dialog(
@@ -2877,7 +2891,7 @@ def test_compare_command_offers_a_two_level_pick_and_opens_the_diff_dialog(
 
 
 # -- Notepad (PROMPT.md: "in dashboard please add a 'Notepad' section ... load in editor tab or in
-# popout window") + removal of the old Notes.txt/.md spawning ----------------------------------------
+# popout window") + removal of the old todo.txt/.md spawning ----------------------------------------
 
 
 def _open_project_with_notes(project_window: MainWindow, tmp_path: Path, text: str = "hi\n") -> Path:
@@ -3053,7 +3067,7 @@ def test_view_output_txt_opens_a_locked_generated_view_of_the_script(
 ) -> None:
     folder = _make_project_with_settings(tmp_path)
     (folder / "script").mkdir(parents=True)
-    (folder / "script" / "output.txt").write_text("do stuff\n", encoding="utf-8")
+    (folder / "script" / "output.mgl").write_text("do stuff\n", encoding="utf-8")
     project_window._on_project_opened(folder)
     pane = project_window.main_panel.active_pane
 
@@ -3072,7 +3086,7 @@ def test_view_output_txt_refreshes_an_already_open_view_with_the_scripts_latest_
 ) -> None:
     folder = _make_project_with_settings(tmp_path)
     (folder / "script").mkdir(parents=True)
-    script_path = folder / "script" / "output.txt"
+    script_path = folder / "script" / "output.mgl"
     script_path.write_text("v1", encoding="utf-8")
     project_window._on_project_opened(folder)
     pane = project_window.main_panel.active_pane
@@ -3300,7 +3314,7 @@ def test_export_rvt_file_as_mglo_calls_write_mglo_with_the_compiled_bin_and_scri
 
     project_window.export_rvt_file()
 
-    assert calls == [(compiled_bin, folder / "script" / "output.txt", dest)]
+    assert calls == [(compiled_bin, folder / "script" / "output.mgl", dest)]
 
 
 def test_export_rvt_file_as_mglo_reports_an_error_when_write_mglo_fails(
@@ -3883,7 +3897,8 @@ def test_the_watched_bin_changing_shows_up_as_uncommitted_rather_than_auto_commi
     project_dir.mkdir()
     folder = tmp_path / "abcd1234"
     (folder / "settings").mkdir(parents=True)
-    (folder / "Notes.txt").write_text("hi\n", encoding="utf-8")
+    (folder / "todo.txt").write_text("hi\n", encoding="utf-8")
+    new_project.ensure_gitignore(folder)
     vcs.init(folder)
     before = len(vcs.history(folder))
     bin_path = new_project.compiled_variant_path(folder)
@@ -4274,8 +4289,8 @@ def test_new_tab_in_adds_a_uniquely_labeled_untitled_editor_tab(window: MainWind
     assert isinstance(pane.widget(pane.currentIndex()), TextEditorWidget)
 
 
-def test_single_clicking_the_tab_bars_empty_space_does_not_create_a_tab(
-    window: MainWindow, qtbot
+def test_clicking_the_tab_bars_empty_space_offers_what_to_open_not_a_new_file(
+    window: MainWindow, qtbot, monkeypatch
 ) -> None:
     window.resize(2000, 800)
     QApplication.processEvents()
@@ -4284,28 +4299,51 @@ def test_single_clicking_the_tab_bars_empty_space_does_not_create_a_tab(
     before = pane.count()
     empty_point = QPoint(tab_bar.width() - 5, tab_bar.height() // 2)
     assert tab_bar.tabAt(empty_point) == -1
+    shown = []
+    monkeypatch.setattr(pane, "show_empty_bar_menu", lambda pos: shown.append(pos))
 
     qtbot.mouseClick(tab_bar, Qt.MouseButton.LeftButton, pos=empty_point)
 
-    assert pane.count() == before
+    assert len(shown) == 1 and pane.count() == before
 
 
-def test_double_clicking_the_tab_bars_empty_space_creates_a_new_tab(
-    window: MainWindow, qtbot
-) -> None:
-    window.resize(2000, 800)
-    QApplication.processEvents()
+def test_clicking_a_tab_itself_offers_nothing(window: MainWindow, qtbot, monkeypatch) -> None:
     pane = window.main_panel.panes[0]
     tab_bar = pane.tabBar()
-    before = pane.count()
-    empty_point = QPoint(tab_bar.width() - 5, tab_bar.height() // 2)
-    assert tab_bar.tabAt(empty_point) == -1
+    shown = []
+    monkeypatch.setattr(pane, "show_empty_bar_menu", lambda pos: shown.append(pos))
 
-    next_number = window.main_panel._next_tab_number
-    qtbot.mouseDClick(tab_bar, Qt.MouseButton.LeftButton, pos=empty_point)
+    qtbot.mouseClick(tab_bar, Qt.MouseButton.LeftButton, pos=tab_bar.tabRect(0).center())
 
-    assert pane.count() == before + 1
-    assert pane.tabText(pane.currentIndex()) == f"Untitled-{next_number}.txt"
+    assert shown == []
+
+
+def _menu_entries(pane) -> list[tuple[str, bool]]:
+    return [(a.text(), a.isEnabled()) for a in pane.empty_bar_menu().actions() if not a.isSeparator()]
+
+
+def test_the_empty_bar_menu_with_no_project_is_all_disabled(window: MainWindow) -> None:
+    assert _menu_entries(window.main_panel.panes[0]) == [
+        ("Load Notepad", False), ("Open Script", False), ("Open Overview.md", False), ("Edit Readme.md", False),
+        ("Preview Readme.md", False),
+    ]
+
+
+def test_the_empty_bar_menu_opens_the_projects_files(project_window: MainWindow, tmp_path: Path) -> None:
+    folder = _make_project_with_settings(tmp_path)
+    (folder / "script").mkdir(exist_ok=True)
+    (folder / "script" / "output.mgl").write_text("game.end_round()\n", encoding="utf-8")
+    project_window._on_project_opened(folder)
+    pane = project_window.main_panel.active_pane
+
+    entries = _menu_entries(pane)
+
+    assert entries == [
+        ("Load Notepad", True), ("Open Script", True), ("Open Overview.md", True), ("Edit Readme.md", True),
+        ("Preview Readme.md", False),  # no README yet
+    ]
+    next(a for a in pane.empty_bar_menu().actions() if a.text() == "Open Script").trigger()
+    assert project_window.main_panel.active_pane.currentWidget().path == folder / "script" / "output.mgl"
 
 
 def test_tab_bar_height_and_split_buttons_survive_overflow(window: MainWindow) -> None:
@@ -5103,6 +5141,7 @@ def test_run_shows_the_restore_icon_since_it_launches_maximized(
     project_dir = tmp_path / ".in-reach"
     project_dir.mkdir()
     monkeypatch.setattr(QApplication, "exec", lambda self: 0)
+    monkeypatch.setattr(MainWindow, "verify_on_first_run", lambda self: None)  # a fresh install's own popup
 
     def existing_windows() -> set[int]:
         return {id(w) for w in QApplication.instance().topLevelWidgets() if isinstance(w, MainWindow)}
@@ -5873,13 +5912,13 @@ def test_command_palette_stage_all_and_unstage_all_click_the_real_git_panel_butt
 ) -> None:
     folder, vcs_module = _make_vcs_project(tmp_path)
     project_window._on_project_opened(folder)
-    (folder / "Notes.txt").write_text("edited\n", encoding="utf-8")
+    (folder / "todo.txt").write_text("edited\n", encoding="utf-8")
     project_window.git_panel.refresh()  # populates changes_list -- Stage All reads from it directly
     commands = project_window.build_command_palette_commands()
 
     next(c for c in commands if c.label == "Stage All").action()
 
-    assert vcs_module.staged_paths(folder) == {"Notes.txt"}
+    assert vcs_module.staged_paths(folder) == {"todo.txt"}
 
     next(c for c in commands if c.label == "Unstage All").action()
 

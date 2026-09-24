@@ -26,9 +26,9 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 
-from PyQt6.QtCore import QRectF, Qt, pyqtSignal
+from PyQt6.QtCore import QEvent, QRectF, Qt, pyqtSignal
 from PyQt6.QtGui import QColor, QFontMetrics, QMouseEvent, QPainter, QPainterPath, QPen
-from PyQt6.QtWidgets import QWidget
+from PyQt6.QtWidgets import QToolTip, QWidget
 
 from in_reach.app.vcs import Snapshot
 
@@ -213,6 +213,27 @@ class GitGraphWidget(QWidget):
         if 0 <= index < len(self._rows):
             return self._rows[index]
         return None
+
+    def row_tooltip(self, index: int) -> str:
+        """What hovering row ``index`` says: its message (a stamp's version too), the env the project was building with
+        at that commit, and its sha."""
+        snapshot = self._rows[index].snapshot
+        lines = [snapshot.stamp_message if snapshot.is_stamp else snapshot.message]
+        if snapshot.is_stamp and snapshot.version:
+            lines[0] = f"v{snapshot.version} -- {lines[0]}"
+        lines.append(f"Env: {snapshot.env}" if snapshot.env else "Env: none")
+        lines.append(snapshot.sha[:12])
+        return "\n".join(lines)
+
+    def event(self, event) -> bool:  # noqa: ANN001 -- QEvent
+        if event.type() == QEvent.Type.ToolTip:
+            row = self._row_at(int(event.pos().y()))
+            if row is None:
+                QToolTip.hideText()
+            else:
+                QToolTip.showText(event.globalPos(), self.row_tooltip(self._rows.index(row)), self)
+            return True
+        return super().event(event)
 
     def select_row(self, index: int) -> None:
         """Programmatically selects row ``index`` (0 = newest), exactly as if it had been clicked --

@@ -955,7 +955,7 @@ def test_drop_between_panes_preserves_path_and_pinned_state(
 # -- Welcome tab ----------------------------------------------------------------------------------
 
 
-def test_welcome_tab_shows_title_subtitle_version_path_and_four_quadrants(qtbot, tmp_path) -> None:
+def test_welcome_tab_shows_title_subtitle_version_path_and_its_sections(qtbot, tmp_path) -> None:
     welcome = WelcomeTab(root_dir=tmp_path)
     qtbot.addWidget(welcome)
 
@@ -964,8 +964,9 @@ def test_welcome_tab_shows_title_subtitle_version_path_and_four_quadrants(qtbot,
     assert "Halo Reach Script Manager" in labels
     assert f"v{in_reach.__version__}" in labels
     assert str(tmp_path) in labels
-    for heading in ("Start", "Recent", "Verify System Settings", "Help & Walkthroughs"):
+    for heading in ("Start", "Recent", "Help & Walkthroughs"):
         assert heading in labels
+    assert "Verify System Settings" not in labels  # it opens by itself on a fresh install, and from the palette
 
 
 def test_welcome_tabs_carry_the_panels_root_dir_into_their_duplicates(window, tmp_path) -> None:
@@ -1536,7 +1537,7 @@ def test_open_file_force_reload_rereads_an_already_open_files_content(
     window: MainWindow, tmp_path: Path
 ) -> None:
     pane = window.main_panel.panes[0]
-    source = tmp_path / "output.txt"
+    source = tmp_path / "output.mgl"
     source.write_text("v1", encoding="utf-8")
     pane.open_file(source)
     index = pane.currentIndex()
@@ -1554,7 +1555,7 @@ def test_open_file_without_force_reload_leaves_an_already_open_tabs_content_stal
     window: MainWindow, tmp_path: Path
 ) -> None:
     pane = window.main_panel.panes[0]
-    source = tmp_path / "output.txt"
+    source = tmp_path / "output.mgl"
     source.write_text("v1", encoding="utf-8")
     pane.open_file(source)
     index = pane.currentIndex()

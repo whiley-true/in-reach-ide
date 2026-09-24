@@ -561,7 +561,7 @@ class ActivityBar(QWidget):
         # Python identifier stay as they are, purely internal implementation detail invisible to
         # the user.
         self.explorer_button = _bar_button(
-            "dashboard", "Dashboard (toggle primary sidebar)", checkable=True, checked=True
+            "dashboard", "Dashboard", checkable=True, checked=True
         )
         self.explorer_button.clicked.connect(lambda: self._handle_click("explorer"))
 
@@ -569,13 +569,13 @@ class ActivityBar(QWidget):
         # gui))" -- a real sidebar-view toggle (like Explorer/Search), just with a placeholder
         # view behind it (see MainWindow's own GitPanel wiring).
         self.git_button = _bar_button(
-            "git", "Git (toggle primary sidebar)", checkable=True, checked=False, cls=_BadgeToolButton
+            "git", "Git", checkable=True, checked=False, cls=_BadgeToolButton
         )
         self.git_button.clicked.connect(lambda: self._handle_click("git"))
 
         # PROMPT.md: "a bookshelf with the label Scripts (also stubbed for now)".
         self.scripts_button = _bar_button(
-            "bookshelf", "Scripts (toggle primary sidebar)", checkable=True, checked=False
+            "bookshelf", "Scripts", checkable=True, checked=False
         )
         self.scripts_button.clicked.connect(lambda: self._handle_click("scripts"))
 
@@ -585,7 +585,7 @@ class ActivityBar(QWidget):
         # DocumentationPanel wiring), same treatment as Git/Scripts above; replaces the Dashboard's
         # old Documentation section (see in_reach_ide.explorer's own history).
         self.documentation_button = _bar_button(
-            "book", "Documentation (toggle primary sidebar)", checkable=True, checked=False
+            "book", "Documentation", checkable=True, checked=False
         )
         self.documentation_button.clicked.connect(lambda: self._handle_click("documentation"))
 
@@ -593,7 +593,7 @@ class ActivityBar(QWidget):
         # for now" -- a real sidebar-view toggle (like Explorer/Search), just with a placeholder
         # view behind it (see MainWindow's own KanbanPanel wiring), same treatment as Git/Scripts.
         self.kanban_button = _bar_button(
-            "kanban", "Kanban (toggle primary sidebar)", checkable=True, checked=False
+            "kanban", "Kanban", checkable=True, checked=False
         )
         self.kanban_button.clicked.connect(lambda: self._handle_click("kanban"))
 
@@ -601,7 +601,7 @@ class ActivityBar(QWidget):
         # -- a real sidebar-view toggle (like Explorer/Search), just with a placeholder view behind
         # it (see MainWindow's own TestingPanel wiring), same treatment as Git/Scripts above.
         self.testing_button = _bar_button(
-            "testtube", "Testing (toggle primary sidebar)", checkable=True, checked=False
+            "testtube", "Testing", checkable=True, checked=False
         )
         self.testing_button.clicked.connect(lambda: self._handle_click("testing"))
 
@@ -609,7 +609,7 @@ class ActivityBar(QWidget):
         # sprinting man" -- a real sidebar-view toggle with a placeholder view behind it (see
         # MainWindow's own PlaytestPanel wiring), same treatment as Testing just above.
         self.playtest_button = _bar_button(
-            "sprint", "Playtest (toggle primary sidebar)", checkable=True, checked=False
+            "sprint", "Playtest", checkable=True, checked=False
         )
         self.playtest_button.clicked.connect(lambda: self._handle_click("playtest"))
 
@@ -617,18 +617,18 @@ class ActivityBar(QWidget):
         # real sidebar-view toggle (like Explorer/Search), just with a placeholder view behind it
         # (see MainWindow's own MapsPanel wiring), same treatment as Git/Scripts above.
         self.maps_button = _bar_button(
-            "map", "Map Files (toggle primary sidebar)", checkable=True, checked=False
+            "map", "Map Files", checkable=True, checked=False
         )
         self.maps_button.clicked.connect(lambda: self._handle_click("maps"))
 
         # PROMPT.md: "beneath the map a stubbed entry for LLM (using a Robot)" -- a real
         # sidebar-view toggle (like Explorer/Search), just with a placeholder view behind it (see
         # MainWindow's own LlmPanel wiring), same treatment as Git/Scripts above.
-        self.llm_button = _bar_button("robot", "LLM (toggle primary sidebar)", checkable=True, checked=False)
+        self.llm_button = _bar_button("robot", "LLM", checkable=True, checked=False)
         self.llm_button.clicked.connect(lambda: self._handle_click("llm"))
 
         self.search_button = _bar_button(
-            "search", "Search (toggle primary sidebar)", checkable=True, checked=False
+            "search", "Search", checkable=True, checked=False
         )
         self.search_button.clicked.connect(lambda: self._handle_click("search"))
 

@@ -1,4 +1,4 @@
-"""The IDE side of pulling a script edited in ReachVariantTool back into ``script/output.txt``: what
+"""The IDE side of pulling a script edited in ReachVariantTool back into ``script/output.mgl``: what
 :meth:`MainWindow._on_watched_bin_changed` does once the resync it runs has recorded that RVT changed the
 script -- silently pull, ask first when that would lose something, or leave the file alone. The
 bookkeeping is :mod:`in_reach.app.script_sync` (tested in ``tests/app/test_script_sync.py``); the real
@@ -26,7 +26,7 @@ def window(qtbot, tmp_path: Path):
 
 @pytest.fixture
 def folder(window: MainWindow, tmp_path: Path) -> Path:
-    """An open project whose last build's script was ``built`` and whose ``output.txt`` is ``mine``."""
+    """An open project whose last build's script was ``built`` and whose ``output.mgl`` is ``mine``."""
     project_folder = tmp_path / "abcd1234"
     (project_folder / new_project.SETTINGS_DIRNAME).mkdir(parents=True)
     (project_folder / new_project.SCRIPT_DIRNAME).mkdir()
@@ -139,7 +139,7 @@ def test_build_profile_directives_are_asked_about(
     window: MainWindow, folder: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     script_sync.script_path(folder).write_text("-- @if DEV\nx = 1\n-- @end\n", encoding="utf-8")
-    script_sync.record_build(folder, "built\n")  # this .bin was built from exactly that output.txt
+    script_sync.record_build(folder, "built\n")  # this .bin was built from exactly that output.mgl
     _rvt_saves(monkeypatch, "edited in rvt\n")
     asked = _prompts(monkeypatch, answer=False)
 
@@ -216,7 +216,7 @@ def test_a_pull_shows_up_as_an_uncommitted_change_rather_than_committing(
     _watch(window, folder)
 
     assert len(vcs.history(folder)) == commits
-    assert "script/output.txt" in [change.path for change in vcs.uncommitted_changes(folder)]
+    assert "script/output.mgl" in [change.path for change in vcs.uncommitted_changes(folder)]
 
 
 def test_the_question_names_what_would_be_lost_and_both_choices(window: MainWindow, monkeypatch: pytest.MonkeyPatch) -> None:

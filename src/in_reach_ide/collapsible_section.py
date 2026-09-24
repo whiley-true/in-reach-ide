@@ -10,7 +10,7 @@ from __future__ import annotations
 
 from PyQt6.QtCore import Qt
 from PyQt6.QtGui import QFont
-from PyQt6.QtWidgets import QFrame, QSizePolicy, QToolButton, QVBoxLayout, QWidget
+from PyQt6.QtWidgets import QFrame, QHBoxLayout, QSizePolicy, QToolButton, QVBoxLayout, QWidget
 
 #: PROMPT.md: "please remove the bubble outline" (Dashboard boxes) -- a plain, borderless, bold
 #: toggle button reads as a section header without needing a bordered frame around it.
@@ -38,7 +38,11 @@ class CollapsibleSection(QWidget):
         self._toggle.setCursor(Qt.CursorShape.PointingHandCursor)
         self._toggle.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed)
         self._toggle.toggled.connect(self._on_toggled)
-        layout.addWidget(self._toggle)
+        self._header = QHBoxLayout()
+        self._header.setContentsMargins(0, 0, 0, 0)
+        self._header.setSpacing(4)
+        self._header.addWidget(self._toggle, 1)
+        layout.addLayout(self._header)
 
         divider = QFrame()
         divider.setFrameShape(QFrame.Shape.HLine)
@@ -46,12 +50,19 @@ class CollapsibleSection(QWidget):
         layout.addWidget(divider)
 
         self.body = body
-        self.body.setVisible(not collapsed)
+        # Parented first: shown while it has no parent, the body would briefly be a window of its own (a native one,
+        # ~50 ms each -- seconds, for a window's worth of sections).
         layout.addWidget(self.body, 1)
+        self.body.setHidden(collapsed)
 
     def _on_toggled(self, checked: bool) -> None:
         self._toggle.setArrowType(Qt.ArrowType.DownArrow if checked else Qt.ArrowType.RightArrow)
         self.body.setVisible(checked)
+
+    def add_header_widget(self, widget: QWidget) -> None:
+        """Puts ``widget`` (a button, say) on the header's own line, right of the title -- shown whether or not the
+        section is expanded."""
+        self._header.addWidget(widget)
 
     def set_title(self, title: str) -> None:
         """Updates the header's own text in place -- e.g. to show a live count alongside the
@@ -62,6 +73,10 @@ class CollapsibleSection(QWidget):
         """Overrides the header's own font -- e.g. to size it independently of :attr:`body`'s
         inherited one (see e.g. ``ExplorerPanel.refresh_font_scale``)."""
         self._toggle.setFont(font)
+
+    @property
+    def title(self) -> str:
+        return self._toggle.text()
 
     @property
     def expanded(self) -> bool:

@@ -61,12 +61,12 @@ def test_search_project_skips_files_that_are_not_valid_utf8(tmp_path: Path) -> N
 def test_search_project_recurses_into_subfolders(tmp_path: Path) -> None:
     nested = tmp_path / "script"
     nested.mkdir(parents=True)
-    (nested / "output.txt").write_text("needle in a haystack\n", encoding="utf-8")
+    (nested / "output.mgl").write_text("needle in a haystack\n", encoding="utf-8")
 
     matches = project_search.search_project(tmp_path, "needle")
 
     assert len(matches) == 1
-    assert matches[0].path == nested / "output.txt"
+    assert matches[0].path == nested / "output.mgl"
 
 
 def test_search_project_empty_query_returns_nothing(tmp_path: Path) -> None:
@@ -174,7 +174,7 @@ def _tree(tmp_path: Path) -> None:
     (tmp_path / "script").mkdir()
     (tmp_path / "settings" / "settings.json").write_text('{"needle": 1}\n', encoding="utf-8")
     (tmp_path / "settings" / "strings.json").write_text('{"needle": 2}\n', encoding="utf-8")
-    (tmp_path / "script" / "output.txt").write_text("needle\n", encoding="utf-8")
+    (tmp_path / "script" / "output.mgl").write_text("needle\n", encoding="utf-8")
     (tmp_path / "README.md").write_text("needle\n", encoding="utf-8")
 
 
@@ -193,9 +193,9 @@ def test_include_glob_by_extension_matches_at_any_depth(tmp_path: Path) -> None:
 def test_include_accepts_a_comma_separated_list_and_a_path(tmp_path: Path) -> None:
     _tree(tmp_path)
 
-    found = _found(project_search.search_project(tmp_path, "needle", include="*.md, script/output.txt"), tmp_path)
+    found = _found(project_search.search_project(tmp_path, "needle", include="*.md, script/output.mgl"), tmp_path)
 
-    assert found == {"README.md", "script/output.txt"}
+    assert found == {"README.md", "script/output.mgl"}
 
 
 def test_include_folder_path_covers_everything_beneath_it(tmp_path: Path) -> None:
@@ -211,7 +211,7 @@ def test_exclude_glob_removes_matching_files(tmp_path: Path) -> None:
 
     found = _found(project_search.search_project(tmp_path, "needle", exclude="*.json, README.md"), tmp_path)
 
-    assert found == {"script/output.txt"}
+    assert found == {"script/output.mgl"}
 
 
 def test_exclude_wins_over_include(tmp_path: Path) -> None:
@@ -263,7 +263,7 @@ def test_replace_honours_include_exclude_and_open_editors(tmp_path: Path) -> Non
 
     changed = project_search.replace_in_project(tmp_path, "needle", "pin", only_paths=[tmp_path / "README.md"])
     assert changed == 1
-    assert "needle" in (tmp_path / "script" / "output.txt").read_text(encoding="utf-8")
+    assert "needle" in (tmp_path / "script" / "output.mgl").read_text(encoding="utf-8")
 
 
 def test_replace_regex_and_whole_word(tmp_path: Path) -> None:

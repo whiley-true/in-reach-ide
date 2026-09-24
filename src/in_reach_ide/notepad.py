@@ -7,9 +7,10 @@ Panel'").
 The notepad is the active project's own ``Notes.txt`` (every project already has one, see
 :data:`in_reach.app.new_project.NOTES_FILENAME`), edited in place and written straight back to disk
 a moment after typing stops -- no Save button, since it's meant for rough notes rather than
-something the user needs to commit to. The two buttons above it hand the same file over to a real
-editor tab or a popout window (MainWindow owns actually opening either, see
-:attr:`NotepadBox.open_in_editor_requested`/:attr:`NotepadBox.open_in_window_requested`).
+something the user needs to commit to. Its "Open in Editor" button (:attr:`NotepadBox.open_in_editor_button`, which the
+Dashboard puts on the section's header line) hands the same file over to a real editor tab (MainWindow owns opening it,
+see :attr:`NotepadBox.open_in_editor_requested`). The file is personal: a project's ``.gitignore`` lists it, and the
+shadow VCS never versions it (:func:`in_reach.app.new_project.is_personal_file`).
 
 The line-number gutter is a small purpose-built one, not the full :class:`~in_reach_ide.editor.
 TextEditorWidget` (which carries a minimap, breadcrumb, fold markers and a find bar -- all more
@@ -22,7 +23,7 @@ from pathlib import Path
 
 from PyQt6.QtCore import QRect, QSize, Qt, QTimer, pyqtSignal
 from PyQt6.QtGui import QPainter, QPalette, QPaintEvent, QResizeEvent
-from PyQt6.QtWidgets import QHBoxLayout, QPlainTextEdit, QToolButton, QVBoxLayout, QWidget
+from PyQt6.QtWidgets import QPlainTextEdit, QToolButton, QVBoxLayout, QWidget
 
 #: PROMPT.md's own placeholder text, verbatim.
 NOTEPAD_PLACEHOLDER = (
@@ -120,12 +121,11 @@ class NotepadEdit(QPlainTextEdit):
 
 
 class NotepadBox(QWidget):
-    """The Dashboard's Notepad body: an "Open in Editor"/"Open in Window" button row above a
-    :class:`NotepadEdit` bound to one file."""
+    """The Dashboard's Notepad body: a :class:`NotepadEdit` bound to one file, and an "Open in Editor" button for its
+    owner to place (not in this widget's own layout -- the Dashboard puts it on the section header)."""
 
-    #: The user asked to open the notepad file as a regular editor tab / in a popout window.
+    #: The user asked to open the notepad file as a regular editor tab.
     open_in_editor_requested = pyqtSignal()
-    open_in_window_requested = pyqtSignal()
     #: Emitted with the file's path right after the box writes it to disk.
     saved = pyqtSignal(Path)
 
@@ -139,22 +139,11 @@ class NotepadBox(QWidget):
         layout.setContentsMargins(0, 4, 0, 0)
         layout.setSpacing(6)
 
-        button_row = QHBoxLayout()
-        button_row.setContentsMargins(0, 0, 0, 0)
         self.open_in_editor_button = QToolButton()
         self.open_in_editor_button.setText("Open in Editor")
         self.open_in_editor_button.setToolTip("Open the notepad in an editor tab")
         self.open_in_editor_button.setCursor(Qt.CursorShape.PointingHandCursor)
         self.open_in_editor_button.clicked.connect(self.open_in_editor_requested.emit)
-        button_row.addWidget(self.open_in_editor_button)
-        self.open_in_window_button = QToolButton()
-        self.open_in_window_button.setText("Open in Window")
-        self.open_in_window_button.setToolTip("Open the notepad in its own popout window")
-        self.open_in_window_button.setCursor(Qt.CursorShape.PointingHandCursor)
-        self.open_in_window_button.clicked.connect(self.open_in_window_requested.emit)
-        button_row.addWidget(self.open_in_window_button)
-        button_row.addStretch(1)
-        layout.addLayout(button_row)
 
         self.edit = NotepadEdit()
         # Small floor so the Dashboard's own minimum height stays modest -- the box itself takes
@@ -226,4 +215,3 @@ class NotepadBox(QWidget):
         bound = self._path is not None
         self.edit.setEnabled(bound)
         self.open_in_editor_button.setEnabled(bound)
-        self.open_in_window_button.setEnabled(bound)

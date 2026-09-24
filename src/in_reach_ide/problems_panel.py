@@ -58,7 +58,7 @@ def problems_from_diagnostics(folder: Path, diagnostics) -> list[Problem]:
 
 def problems_from_build(folder: Path, result, *, linked: bool) -> list[Problem]:
     """A failed (or warning-carrying) build's messages. ``BuildMessage.file`` is set for a linked project; for a
-    single-file project every positioned message is about ``script/output.txt``."""
+    single-file project every positioned message is about ``script/output.mgl``."""
     problems: list[Problem] = []
     if result.failure:
         problems.append(Problem("error", result.failure))
@@ -69,7 +69,7 @@ def problems_from_build(folder: Path, result, *, linked: bool) -> list[Problem]:
             if message.file:
                 path = _resolve(folder, message.file)
             elif message.line and not linked:
-                path = folder / "script" / "output.txt"
+                path = folder / "script" / "output.mgl"
             else:
                 path = None
             problems.append(Problem(severity, message.text, path, message.line, message.col, message.code))
@@ -81,6 +81,8 @@ class ProblemsPanel(QWidget):
     open_requested = pyqtSignal(Path, int)
     #: ``(errors, warnings)`` after every :meth:`set_problems`.
     counts_changed = pyqtSignal(int, int)
+    #: What's listed changed -- the editors redraw their underlines from it.
+    problems_changed = pyqtSignal()
 
     def __init__(self, parent: QWidget | None = None) -> None:
         super().__init__(parent)
@@ -137,6 +139,7 @@ class ProblemsPanel(QWidget):
             parts.append(f"{other} notice{'s' if other != 1 else ''}")
         self.summary.setText(", ".join(parts) if parts else "No problems")
         self.counts_changed.emit(errors, warnings)
+        self.problems_changed.emit()
 
     def clear(self) -> None:
         self.set_problems([])

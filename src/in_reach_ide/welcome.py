@@ -1,18 +1,15 @@
 """The Welcome tab shown when the editor first opens -- modelled after VSCode's own Welcome page.
 
 Below the title/subtitle (and the running version plus the folder in-reach was opened against) the
-page divides into four quadrants: Start and Recent down the left, Verify System Settings and Help &
-Walkthroughs down the right.
+page has Start and Help & Walkthroughs side by side, with Recent under them.
 
-Everything on the page is a view of one file -- the project's ``.in-reach/.env``. The verify
-quadrant's "N of 12 verified" count is a summary of that same file, not a checklist of its own --
-see :class:`~in_reach_ide.verify_dialog.VerifyDialog` for the actual step-by-step run, and
-:class:`~in_reach_ide.settings_info_dialog.SettingsInfoDialog` (its own "What is this?" button) for
-why any of this is asked for in the first place. The "New Project from ..." actions enable because
-the variant-folder steps behind them are verified; Recent is a key of its own. That's why
-:meth:`WelcomeTab.refresh` is all it takes to bring the whole page back in sync after a verify run,
-a "Clear Entries", or a new project -- see :mod:`within_reach.system_verify` for what fills those
-keys in.
+Everything on the page is a view of one file -- the project's ``.in-reach/.env``. There is no verify section any more:
+verifying the Halo: MCC install (:class:`~in_reach_ide.verify_dialog.VerifyDialog`) opens on its own the first time
+in-reach runs with nothing verified (``MainWindow.verify_on_first_run``), and "Verify System Settings" in the command
+palette runs it again. The "New Project from ..." actions enable because the variant-folder steps behind them are
+verified; Recent is a key of its own. That's why :meth:`WelcomeTab.refresh` is all it takes to bring the whole page
+back in sync after a verify run or a new project -- see :mod:`within_reach.system_verify` for what fills those keys
+in.
 """
 
 from __future__ import annotations
@@ -26,12 +23,10 @@ from PyQt6.QtWidgets import (
     QDialog,
     QFrame,
     QGridLayout,
-    QHBoxLayout,
     QLabel,
     QMessageBox,
     QPushButton,
     QScrollArea,
-    QTabWidget,
     QVBoxLayout,
     QWidget,
 )
@@ -42,15 +37,9 @@ from within_reach import system_verify
 from in_reach_ide import recent
 from in_reach_ide import file_dialogs, icons
 from in_reach_ide.new_project_dialog import NewProjectDialog
-from in_reach_ide.settings_info_dialog import SettingsInfoDialog
-from in_reach_ide.verify_dialog import VerifyDialog
 
 _ICON_SIZE = 16
 
-_CUSTOM_TAB_PLACEHOLDER = (
-    "For a non-Steam install of Halo: MCC. Nothing to configure here yet -- verify against "
-    "Steam (Halo MCC) for now."
-)
 
 # Placeholders only: there's no walkthrough content in this repo yet, so these advertise what's
 # coming rather than pretending to open something.
@@ -135,9 +124,8 @@ class WelcomeTab(QWidget):
         grid.setHorizontalSpacing(16)
         grid.setVerticalSpacing(16)
         grid.addWidget(self._build_start_quadrant(), 0, 0)
-        grid.addWidget(self._build_verify_quadrant(), 0, 1)
-        grid.addWidget(self._build_recent_quadrant(), 1, 0)
-        grid.addWidget(self._build_help_quadrant(), 1, 1)
+        grid.addWidget(self._build_help_quadrant(), 0, 1)
+        grid.addWidget(self._build_recent_quadrant(), 1, 0, 1, 2)
         grid.setColumnStretch(0, 1)
         grid.setColumnStretch(1, 1)
         grid.setRowStretch(0, 1)
@@ -234,57 +222,6 @@ class WelcomeTab(QWidget):
         body.addWidget(self._recent_empty_label)
         return frame
 
-    def _build_verify_quadrant(self) -> QWidget:
-        frame, body = self._build_quadrant("Verify System Settings")
-
-        tabs = QTabWidget()
-        tabs.addTab(self._build_steam_verify_page(), "Steam (Halo MCC)")
-        tabs.addTab(self._build_custom_verify_page(), "Custom")
-        self.verify_tabs = tabs
-        body.addWidget(tabs)
-        return frame
-
-    def _build_steam_verify_page(self) -> QWidget:
-        page = QWidget()
-        page_layout = QVBoxLayout(page)
-        page_layout.setContentsMargins(12, 12, 12, 12)
-        page_layout.setSpacing(8)
-
-        # A summary rather than the twelve-item checklist itself -- see VerifyDialog for the actual
-        # step-by-step results, and SettingsInfoDialog (below) for what each step is even for.
-        self.verified_count_label = QLabel()
-        page_layout.addWidget(self.verified_count_label)
-        page_layout.addStretch(1)
-
-        buttons = QHBoxLayout()
-        buttons.setSpacing(8)
-        self.verify_now_button = QPushButton("Verify Now")
-        self.verify_now_button.setCursor(Qt.CursorShape.PointingHandCursor)
-        self.verify_now_button.clicked.connect(self.verify_now)
-        self.clear_entries_button = QPushButton("Clear Entries")
-        self.clear_entries_button.setCursor(Qt.CursorShape.PointingHandCursor)
-        self.clear_entries_button.clicked.connect(self.clear_entries)
-        self.what_is_this_button = QPushButton("What is this?")
-        self.what_is_this_button.setCursor(Qt.CursorShape.PointingHandCursor)
-        self.what_is_this_button.clicked.connect(self.show_settings_info)
-        buttons.addWidget(self.verify_now_button)
-        buttons.addWidget(self.clear_entries_button)
-        buttons.addWidget(self.what_is_this_button)
-        buttons.addStretch(1)
-        page_layout.addLayout(buttons)
-        return page
-
-    def _build_custom_verify_page(self) -> QWidget:
-        page = QWidget()
-        page_layout = QVBoxLayout(page)
-        page_layout.setContentsMargins(12, 12, 12, 12)
-        placeholder = QLabel(_CUSTOM_TAB_PLACEHOLDER)
-        placeholder.setWordWrap(True)
-        placeholder.setEnabled(False)
-        page_layout.addWidget(placeholder)
-        page_layout.addStretch(1)
-        return page
-
     def _build_help_quadrant(self) -> QWidget:
         frame, body = self._build_quadrant("Help & Walkthroughs")
         for entry in _HELP_ENTRIES:
@@ -297,10 +234,8 @@ class WelcomeTab(QWidget):
     # -- state ----------------------------------------------------------------------------------
 
     def refresh(self) -> None:
-        """Re-reads the ``.env`` and brings the verify count, the Start actions and Recent back in sync."""
+        """Re-reads the ``.env`` and brings the Start actions and Recent back in sync."""
         verified = system_verify.verified_keys(self.project_dir)
-        verified_count = sum(1 for is_set in verified.values() if is_set)
-        self.verified_count_label.setText(f"{verified_count} of {len(verified)} settings verified.")
 
         self.new_builtin_button.setEnabled(
             verified.get(system_verify.STANDARD_VARIANTS_KEY, False)
@@ -336,25 +271,6 @@ class WelcomeTab(QWidget):
             button.setToolTip(str(path))
             button.clicked.connect(lambda _checked=False, p=path: self._open_project(p))
             self._recent_layout.addWidget(button, 0, Qt.AlignmentFlag.AlignLeft)
-
-    # -- verify actions --------------------------------------------------------------------------
-
-    def verify_now(self) -> None:
-        """Opens the step-by-step verification popout, re-ticking the checklist once it's done."""
-        dialog = VerifyDialog(self.project_dir, self)
-        dialog.run_finished.connect(self.refresh)
-        dialog.start()
-        dialog.exec()
-        self.refresh()
-
-    def clear_entries(self) -> None:
-        """Blanks every verified value, resetting the count back to zero."""
-        system_verify.clear_entries(self.project_dir)
-        self.refresh()
-
-    def show_settings_info(self) -> None:
-        """Opens the "What is this?" explainer for why these settings are asked for at all."""
-        SettingsInfoDialog(self).exec()
 
     # -- start actions ---------------------------------------------------------------------------
 

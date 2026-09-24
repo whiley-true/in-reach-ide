@@ -39,17 +39,17 @@ def _details(command) -> dict[str, str]:
     return {child.label: child.detail for child in command.children}
 
 
-def test_the_palette_lists_this_projects_profiles_and_a_no_profile_choice(project_window, tmp_path: Path) -> None:
+def test_the_palette_lists_this_projects_envs_and_no_no_env_choice(project_window, tmp_path: Path) -> None:
     project_window._on_project_opened(_project(tmp_path, "release", "dev"))
 
     labels = [child.label for child in _command(project_window).children]
 
-    assert labels == ["dev", "release", "No env"]
+    assert labels == ["dev", "release"]
 
 
-def test_with_nothing_chosen_no_profile_is_marked_active(project_window, tmp_path: Path) -> None:
+def test_with_nothing_chosen_no_env_is_marked_active(project_window, tmp_path: Path) -> None:
     project_window._on_project_opened(_project(tmp_path, "dev", "release"))
-    assert _details(_command(project_window)) == {"dev": "", "release": "", "No env": "active"}
+    assert _details(_command(project_window)) == {"dev": "", "release": ""}
 
 
 def test_picking_a_profile_makes_it_the_one_the_project_builds_with(project_window, tmp_path: Path) -> None:
@@ -65,22 +65,12 @@ def test_the_active_profile_is_marked_the_next_time_the_palette_opens(project_wi
     project_window._on_project_opened(_project(tmp_path, "dev", "release"))
     next(c for c in _command(project_window).children if c.label == "dev").action()
 
-    assert _details(_command(project_window)) == {"dev": "active", "release": "", "No env": ""}
-
-
-def test_picking_no_profile_clears_the_choice(project_window, tmp_path: Path) -> None:
-    folder = _project(tmp_path, "dev")
-    project_window._on_project_opened(folder)
-    script_preprocess.set_active_env(folder, "dev")
-
-    next(c for c in _command(project_window).children if c.label == "No env").action()
-
-    assert script_preprocess.active_env_name(folder) is None
+    assert _details(_command(project_window)) == {"dev": "active", "release": ""}
 
 
 def test_the_choice_actually_changes_what_the_compiled_view_shows(project_window, tmp_path: Path) -> None:
     folder = _project(tmp_path, "dev")
-    (folder / "script" / "output.txt").write_text("-- @if DEV\ndebug()\n-- @end\nwin = ${SCORE}\n", encoding="utf-8")
+    (folder / "script" / "output.mgl").write_text("-- @if DEV\ndebug()\n-- @end\nwin = ${SCORE}\n", encoding="utf-8")
     (folder / "script" / "env" / "release.env").write_text("SCORE=50\n", encoding="utf-8")
     project_window._on_project_opened(folder)
 
@@ -153,8 +143,8 @@ def test_picking_a_profile_updates_the_indicator_at_once(project_window, tmp_pat
     next(c for c in _command(project_window).children if c.label == "dev").action()
     assert _indicator(project_window).text() == "Env: dev"
 
-    next(c for c in _command(project_window).children if c.label == "No env").action()
-    assert _indicator(project_window).text() == "No env"
+    next(c for c in _command(project_window).children if c.label == "release").action()
+    assert _indicator(project_window).text() == "Env: release"
 
 
 def test_closing_the_project_hides_the_indicator_again(project_window, tmp_path: Path) -> None:
@@ -189,7 +179,7 @@ def test_clicking_the_indicator_opens_the_same_pick_as_the_palette(project_windo
 
     [(commands, heading)] = opened
     assert heading == "Select Env"
-    assert [c.label for c in commands] == ["dev", "release", "No env"]
+    assert [c.label for c in commands] == ["dev", "release"]
 
 
 def test_clicking_the_indicator_for_a_project_that_lost_its_profiles_opens_nothing(project_window, tmp_path: Path, monkeypatch) -> None:

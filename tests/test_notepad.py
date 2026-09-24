@@ -31,7 +31,7 @@ def test_starts_unbound_and_disabled(box: NotepadBox) -> None:
     assert box.path is None
     assert box.edit.isEnabled() is False
     assert box.open_in_editor_button.isEnabled() is False
-    assert box.open_in_window_button.isEnabled() is False
+    assert not hasattr(box, "open_in_window_button")
 
 
 def test_set_path_loads_the_files_content_and_enables_the_box(box: NotepadBox, tmp_path: Path) -> None:
@@ -43,7 +43,6 @@ def test_set_path_loads_the_files_content_and_enables_the_box(box: NotepadBox, t
     assert box.edit.toPlainText() == "line one\nline two\n"
     assert box.edit.isEnabled() is True
     assert box.open_in_editor_button.isEnabled() is True
-    assert box.open_in_window_button.isEnabled() is True
 
 
 def test_a_missing_file_loads_empty_and_is_not_created_by_loading(box: NotepadBox, tmp_path: Path) -> None:
@@ -157,8 +156,6 @@ def test_buttons_emit_their_request_signals(box: NotepadBox, tmp_path: Path, qtb
 
     with qtbot.waitSignal(box.open_in_editor_requested):
         box.open_in_editor_button.click()
-    with qtbot.waitSignal(box.open_in_window_requested):
-        box.open_in_window_button.click()
 
 
 # -- line numbers -----------------------------------------------------------------------------------
@@ -257,8 +254,16 @@ def test_notepad_request_signals_are_relayed_by_the_dashboard(explorer: Explorer
 
     with qtbot.waitSignal(explorer.notepad_open_in_editor_requested):
         explorer.notepad.open_in_editor_button.click()
-    with qtbot.waitSignal(explorer.notepad_open_in_window_requested):
-        explorer.notepad.open_in_window_button.click()
+
+
+def test_notepad_is_titled_gitignored_with_open_in_editor_on_its_header(explorer: ExplorerPanel, tmp_path: Path) -> None:
+    explorer.open_project(tmp_path)
+    section = explorer.notepad_section
+
+    assert section._toggle.text() == "Notepad (gitignored)"
+    assert explorer.notepad.open_in_editor_button.parent() is section
+    section.set_expanded(False)
+    assert explorer.notepad.open_in_editor_button.isVisible() and not explorer.notepad.edit.isVisible()
 
 
 def test_notepad_autosave_is_relayed_by_the_dashboard(explorer: ExplorerPanel, tmp_path: Path, qtbot) -> None:

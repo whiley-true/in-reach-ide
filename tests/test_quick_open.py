@@ -7,14 +7,14 @@ def test_list_project_files_returns_every_file_sorted_by_relative_path(tmp_path:
     (tmp_path / "settings").mkdir()
     (tmp_path / "settings" / "settings.json").write_text("{}", encoding="utf-8")
     (tmp_path / "script").mkdir()
-    (tmp_path / "script" / "output.txt").write_text("", encoding="utf-8")
+    (tmp_path / "script" / "output.mgl").write_text("", encoding="utf-8")
     (tmp_path / "Notes.txt").write_text("", encoding="utf-8")
 
     files = quick_open.list_project_files(tmp_path)
 
     assert [p.relative_to(tmp_path) for p in files] == [
         Path("Notes.txt"),
-        Path("script") / "output.txt",
+        Path("script") / "output.mgl",
         Path("settings") / "settings.json",
     ]
 

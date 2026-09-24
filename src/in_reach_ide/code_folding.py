@@ -56,3 +56,53 @@ def compute_fold_ranges(text: str) -> dict[int, int]:
         in_string = False  # a real JSON/script string never spans a newline unescaped
 
     return ranges
+
+
+#: What opens a Megalo block that ``end`` closes. ``altif``/``alt`` continue an ``if`` rather than open a block of
+#: their own, and ``then`` belongs to its ``if``.
+_MEGALO_OPENERS = frozenset({"do", "if", "function"})
+
+
+def _megalo_words(line: str) -> list[str]:
+    """``line``'s words, strings and ``--`` comments left out."""
+    words, word, in_string, index = [], "", False, 0
+    while index < len(line):
+        ch = line[index]
+        if in_string:
+            if ch == "\\":
+                index += 1
+            elif ch == '"':
+                in_string = False
+        elif ch == '"':
+            in_string = True
+        elif line.startswith("--", index):
+            break
+        elif ch.isalnum() or ch == "_":
+            word += ch
+            index += 1
+            continue
+        if word:
+            words.append(word)
+            word = ""
+        index += 1
+    if word:
+        words.append(word)
+    return words
+
+
+def compute_megalo_fold_ranges(text: str) -> dict[int, int]:
+    """:func:`compute_fold_ranges` for Megalo script: each line that opens a block (``for each ... do``, ``if ... then``,
+    ``on init: do``, ``function name()``) maps to its ``end``'s line -- folding hides the body and the ``end``, the
+    same as a bracket's region. A block with nothing between its opener and ``end`` isn't foldable; an unclosed one
+    (mid-edit) is left out, and a stray ``end`` is ignored."""
+    ranges: dict[int, int] = {}
+    stack: list[int] = []
+    for line_no, line in enumerate(text.split("\n")):
+        for word in _megalo_words(line):
+            if word in _MEGALO_OPENERS:
+                stack.append(line_no)
+            elif word == "end" and stack:
+                start = stack.pop()
+                if line_no - 1 > start:
+                    ranges[start] = max(ranges.get(start, 0), line_no)
+    return ranges

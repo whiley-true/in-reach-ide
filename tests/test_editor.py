@@ -132,11 +132,11 @@ def test_breadcrumb_is_empty_with_no_path(qtbot) -> None:
 
 
 def test_breadcrumb_shows_the_folder_and_file_name(qtbot) -> None:
-    path = Path("/project/script/output.txt")
+    path = Path("/project/script/output.mgl")
     editor = TextEditorWidget(path=path)
     qtbot.addWidget(editor)
 
-    assert editor._breadcrumb.text() == "script > output.txt"
+    assert editor._breadcrumb.text() == "script > output.mgl"
 
 
 def test_breadcrumb_includes_the_project_name_when_inside_a_real_project(qtbot, tmp_path) -> None:
@@ -148,21 +148,21 @@ def test_breadcrumb_includes_the_project_name_when_inside_a_real_project(qtbot, 
     (project / "settings" / "settings.json").write_text(
         '{"meta": {"title": "Slayer Plus"}}', encoding="utf-8"
     )
-    path = project / "script" / "output.txt"
+    path = project / "script" / "output.mgl"
     path.write_text("", encoding="utf-8")
 
     editor = TextEditorWidget(path=path)
     qtbot.addWidget(editor)
 
-    assert editor._breadcrumb.text() == "Slayer Plus > script > output.txt"
+    assert editor._breadcrumb.text() == "Slayer Plus > script > output.mgl"
 
 
 def test_breadcrumb_omits_the_project_name_outside_any_real_project(qtbot) -> None:
-    path = Path("/project/script/output.txt")  # no real Notes.txt ancestor on disk
+    path = Path("/project/script/output.mgl")  # no real Notes.txt ancestor on disk
     editor = TextEditorWidget(path=path)
     qtbot.addWidget(editor)
 
-    assert editor._breadcrumb.text() == "script > output.txt"
+    assert editor._breadcrumb.text() == "script > output.mgl"
 
 
 def test_set_path_refreshes_the_project_name_in_the_breadcrumb(qtbot, tmp_path) -> None:
@@ -195,7 +195,7 @@ def test_breadcrumb_appends_the_live_json_path_for_a_json_file(qtbot) -> None:
 
 
 def test_breadcrumb_does_not_append_a_json_path_for_a_non_json_file(qtbot) -> None:
-    path = Path("/project/script/output.txt")
+    path = Path("/project/script/output.mgl")
     editor = TextEditorWidget(path=path)
     qtbot.addWidget(editor)
     editor.setPlainText('{\n  "meta": 1\n}')  # incidentally JSON-shaped, but not a .json file
@@ -204,7 +204,7 @@ def test_breadcrumb_does_not_append_a_json_path_for_a_non_json_file(qtbot) -> No
     cursor.setPosition(editor.toPlainText().index("1"))
     editor.setTextCursor(cursor)
 
-    assert editor._breadcrumb.text() == "script > output.txt"
+    assert editor._breadcrumb.text() == "script > output.mgl"
 
 
 def test_set_path_refreshes_the_breadcrumb(qtbot) -> None:
@@ -437,7 +437,7 @@ def test_fixing_the_error_clears_the_underline_and_minimap_flag(qtbot, tmp_path)
 
 
 def test_a_non_schema_backed_file_never_shows_an_error(qtbot) -> None:
-    path = Path("/project/script/output.txt")
+    path = Path("/project/script/output.mgl")
     editor = TextEditorWidget(path=path)
     qtbot.addWidget(editor)
 
@@ -549,7 +549,7 @@ def test_a_json_file_with_no_schema_key_is_fully_editable(qtbot, tmp_path) -> No
 
 
 def test_a_non_json_file_containing_the_literal_text_is_fully_editable(qtbot) -> None:
-    path = Path("/project/script/output.txt")
+    path = Path("/project/script/output.mgl")
     editor = TextEditorWidget(path=path)
     qtbot.addWidget(editor)
     text = '"$schema": "not actually json here"'
@@ -991,7 +991,7 @@ def test_opening_a_settings_json_file_enlarges_its_own_font(qtbot, tmp_path, nam
 
 
 def test_opening_an_unrelated_json_file_does_not_enlarge_its_font(qtbot, tmp_path) -> None:
-    path = tmp_path / "output.txt"
+    path = tmp_path / "output.mgl"
     editor = TextEditorWidget(path=path)
     qtbot.addWidget(editor)
 
@@ -1308,3 +1308,64 @@ def test_refresh_theme_on_a_file_with_no_highlighter_does_not_raise(qtbot) -> No
     qtbot.addWidget(editor)
     editor.refresh_theme(QColor("#252526"))
     editor.refresh_theme()
+
+
+def test_a_megalo_file_folds_its_blocks(qtbot, tmp_path) -> None:
+    editor = TextEditorWidget(path=tmp_path / "output.mgl")
+    qtbot.addWidget(editor)
+    editor.setPlainText("for each player do\n   x = 1\nend\n{\n}\n")
+
+    assert editor._fold_ranges == {0: 2}  # its do ... end, not the brackets
+    editor.toggle_fold(0)
+    assert [editor.document().findBlockByNumber(i).isVisible() for i in range(4)] == [True, False, False, True]
+
+
+def test_the_line_numbers_follow_the_text_when_it_scrolls(qtbot, tmp_path) -> None:
+    from PyQt6.QtWidgets import QApplication
+
+    editor = TextEditorWidget(path=tmp_path / "output.mgl")
+    qtbot.addWidget(editor)
+    editor.setPlainText("".join(f"x = {i}\n" for i in range(200)))
+    editor.resize(600, 300)
+    editor.show()
+    QApplication.processEvents()
+    painted = []
+    original = editor._edit.paint_line_numbers
+    editor._edit.paint_line_numbers = lambda event: (painted.append(editor._edit.firstVisibleBlock().blockNumber()), original(event))
+
+    editor._edit.verticalScrollBar().setValue(60)
+    QApplication.processEvents()
+
+    assert painted and painted[-1] == editor._edit.firstVisibleBlock().blockNumber() == 60
+
+
+def test_a_docstrings_where_line_cant_be_edited(qtbot, tmp_path) -> None:
+    from PyQt6.QtCore import Qt
+    from PyQt6.QtGui import QTextCursor
+
+    editor = TextEditorWidget(path=tmp_path / "DOCSTRINGS.md")
+    qtbot.addWidget(editor)
+    text = "# Docstrings\n\n## One more.\n<!-- output.mgl:6 -->\n\nMy text.\n"
+    editor.setPlainText(text)
+    where = text.index("<!--")
+
+    for position, key in ((where + 3, Qt.Key.Key_X), (where, Qt.Key.Key_Backspace), (where - 1, Qt.Key.Key_Delete)):
+        cursor = editor.textCursor()
+        cursor.setPosition(position)
+        editor.setTextCursor(cursor)
+        qtbot.keyClick(editor._edit, key)
+    assert editor.toPlainText() == text
+
+    cursor = editor.textCursor()
+    cursor.setPosition(text.index("My text.") + len("My text."))
+    editor.setTextCursor(cursor)
+    qtbot.keyClicks(editor._edit, " More")
+    assert "My text. More" in editor.toPlainText()  # the text itself is the user's
+
+
+def test_where_lines_are_only_protected_in_docstrings_md(qtbot, tmp_path) -> None:
+    editor = TextEditorWidget(path=tmp_path / "notes.md")
+    qtbot.addWidget(editor)
+    editor.setPlainText("<!-- output.mgl:6 -->\n")
+
+    assert editor._edit._protected_spans() == []
