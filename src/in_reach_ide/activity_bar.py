@@ -1,5 +1,5 @@
-"""The far-left activity bar: eleven reorderable icons at the top -- a compile/"Apply" action and
-ten sidebar-view toggles (Dashboard, Search, Git, Scripts, Map Files, Documentation, Kanban,
+"""The far-left activity bar: ten reorderable icons at the top -- a compile/"Apply" action and
+nine sidebar-view toggles (Dashboard, Search, Git, Scripts, Map Files, Documentation,
 Testing, Playtest, LLM), exactly one of whose views is ever active, switching the primary sidebar's content,
 VSCode-style: clicking the already-active one collapses the sidebar instead of switching -- then,
 pinned at the bottom: a flame status indicator (see :meth:`ActivityBar.set_halo_status`), a help
@@ -22,9 +22,8 @@ and View Compiled ... for Launch RVT") retired the RVT launcher icon here (see
 :mod:`in_reach_ide.explorer`'s own "Launch RVT" dashboard button instead) and the Locations toggle
 entirely, and reordered the remaining icons to compile, dashboard, git, scripts, maps, documentation,
 testing, llm, search. A later pass (PROMPT.md: "please move search magnifying glass to come under
-dashboard ... under documentation please add an icon for Kanban ... please move tests to come
-before llm") moved Search up under Dashboard, added a stubbed Kanban toggle right after
-Documentation, and moved Testing to sit directly ahead of LLM -- see :data:`_DEFAULT_ORDER`.
+dashboard ... please move tests to come before llm") moved Search up under Dashboard and moved Testing
+to sit directly ahead of LLM -- see :data:`_DEFAULT_ORDER`.
 """
 
 from __future__ import annotations
@@ -88,8 +87,7 @@ _STATUS_TOOLTIPS = {
 #: existing "documentation"/"llm" keys, not a rename -- see this module's own docstring). A later
 #: PROMPT.md pass moved "documentation" below "testing": "move documention to come below testing in
 #: default order and in the top bar view". A further pass moved search up ("please move search
-#: magnifying glass to come under dashboard"), added a Kanban stub right after Documentation
-#: ("under documentation please add an icon for Kanban"), and moved Testing to sit directly ahead of
+#: magnifying glass to come under dashboard") and moved Testing to sit directly ahead of
 #: LLM ("please move tests to come before llm"). Playtest sits directly after Testing ("please add an
 #: icon under testing for playtest").
 _DEFAULT_ORDER = (
@@ -100,7 +98,6 @@ _DEFAULT_ORDER = (
     "scripts",
     "maps",
     "documentation",
-    "kanban",
     "testing",
     "playtest",
     "llm",
@@ -589,14 +586,6 @@ class ActivityBar(QWidget):
         )
         self.documentation_button.clicked.connect(lambda: self._handle_click("documentation"))
 
-        # PROMPT.md: "under documentation please add an icon for Kanban, this should be stubbed
-        # for now" -- a real sidebar-view toggle (like Explorer/Search), just with a placeholder
-        # view behind it (see MainWindow's own KanbanPanel wiring), same treatment as Git/Scripts.
-        self.kanban_button = _bar_button(
-            "kanban", "Kanban", checkable=True, checked=False
-        )
-        self.kanban_button.clicked.connect(lambda: self._handle_click("kanban"))
-
         # PROMPT.md: "above maps icon, please add a stubbed entrance for Testing (using a testube)"
         # -- a real sidebar-view toggle (like Explorer/Search), just with a placeholder view behind
         # it (see MainWindow's own TestingPanel wiring), same treatment as Git/Scripts above.
@@ -637,7 +626,6 @@ class ActivityBar(QWidget):
             "git": self.git_button,
             "scripts": self.scripts_button,
             "documentation": self.documentation_button,
-            "kanban": self.kanban_button,
             "testing": self.testing_button,
             "playtest": self.playtest_button,
             "maps": self.maps_button,
@@ -655,7 +643,6 @@ class ActivityBar(QWidget):
                     "git": self.git_button,
                     "scripts": self.scripts_button,
                     "documentation": self.documentation_button,
-                    "kanban": self.kanban_button,
                     "testing": self.testing_button,
                     "playtest": self.playtest_button,
                     "maps": self.maps_button,

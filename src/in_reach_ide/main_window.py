@@ -39,7 +39,6 @@ from PyQt6.QtWidgets import (
 from in_reach.app import env_file, halo_status, logging_setup, mcc_launcher, new_project, project, rvt_launcher, script_sync
 from within_reach import system_verify
 from in_reach_ide import indent_settings, recent
-from in_reach_ide.kanban_db import KanbanStore
 from in_reach_ide import file_dialogs, icons, style
 from in_reach_ide import indent_state, word_wrap
 from in_reach_ide import theme as theme_module
@@ -57,7 +56,6 @@ from in_reach_ide.editor import (
 )
 from in_reach_ide.explorer import ExplorerPanel
 from in_reach_ide.git_panel import GitPanel
-from in_reach_ide.kanban_panel import KanbanPanel
 from in_reach_ide.llm_panel import LlmPanel
 from in_reach_ide import maps_panel as maps_panel_module
 from in_reach_ide.maps_panel import MapsPanel
@@ -187,7 +185,6 @@ _VIEW_DISPLAY_NAMES = {
     "git": "Git",
     "scripts": "Scripts",
     "documentation": "Documentation",
-    "kanban": "Kanban",
     "testing": "Testing",
     "playtest": "Playtest",
     "maps": "Map Files",
@@ -365,10 +362,9 @@ class _ViewMenuButton(QToolButton):
         # PROMPT.md's own re-ordering, keyed to activity_bar.py's own button attributes -- "docs"/
         # "ai" there are the existing Documentation/LLM entries, not a rename (see activity_bar.py's
         # own module docstring). A later pass ("please move search magnifying glass to come under
-        # dashboard ... and move in view topbar tap"; "under documentation please add an icon for
-        # Kanban ... and finally please move tests to come before llm (and re-arrange order in
-        # view)") moved Search up under Dashboard, added Kanban right after Documentation, and
-        # moved Testing to sit directly ahead of LLM -- kept in sync with activity_bar.py's own
+        # dashboard ... and move in view topbar tap"; "and finally please move tests to come before llm
+        # (and re-arrange order in view)") moved Search up under Dashboard and moved Testing to sit
+        # directly ahead of LLM -- kept in sync with activity_bar.py's own
         # _DEFAULT_ORDER. A further pass ("add command palette shortcuts and entries for all present
         # functionality[,] use equivalent vscode shortcuts whenever possible") gave the three panels
         # with a real VSCode-equivalent view (Explorer/Search/Source Control) that view's own real
@@ -382,7 +378,6 @@ class _ViewMenuButton(QToolButton):
             ("Scripts", "scripts_button", None),
             ("Map Files", "maps_button", None),
             ("Documentation", "documentation_button", None),
-            ("Kanban", "kanban_button", None),
             ("Testing", "testing_button", None),
             ("Playtest", "playtest_button", None),
             ("LLM", "llm_button", None),
@@ -661,10 +656,6 @@ class MainWindow(QWidget):
         # it should be closed" -- the RVT process launch_rvt() most recently started for each
         # project folder, so _close_rvt_for_project() knows what (if anything) to terminate.
         self._rvt_processes: dict[Path, subprocess.Popen] = {}
-        # Created the first time anything actually needs it (see _kanban_store()) -- most sessions
-        # never open the Kanban view, and this keeps a fresh kanban.db from appearing in every
-        # .in-reach folder a window merely opens.
-        self._kanban_store_obj: KanbanStore | None = None
         self.setWindowFlag(Qt.WindowType.FramelessWindowHint, True)
         self.setWindowTitle("in-reach")
         self.setWindowIcon(icons.app_icon())
@@ -758,7 +749,6 @@ class MainWindow(QWidget):
 
         env_project_dir = project.get_project_dir(self.root_dir)
         self.explorer_panel.active_project_changed.connect(self.search_panel.set_project_folder)
-        self.explorer_panel.active_project_changed.connect(self.kanban_panel.set_project_folder)
         self.explorer_panel.active_project_changed.connect(self.git_panel.set_project)
         self.explorer_panel.active_project_changed.connect(self._rewatch_project_bin)
         self.explorer_panel.active_project_changed.connect(self._rewatch_script)
@@ -806,7 +796,6 @@ class MainWindow(QWidget):
         self.explorer_panel.notepad_open_in_editor_requested.connect(self.open_notepad_in_editor)
         self.explorer_panel.notepad_saved.connect(self._on_notepad_saved)
         self.maps_panel.open_folder_requested.connect(self._open_builtin_folder)
-        self.kanban_panel.open_board_requested.connect(self._open_kanban_board)
         self._refresh_maps_panel()
         self.search_panel.file_activated.connect(self._on_search_file_activated)
         self.search_panel.set_open_paths_provider(self.main_panel.open_file_paths)
@@ -979,7 +968,6 @@ class MainWindow(QWidget):
         self.git_panel = GitPanel()
         self.scripts_panel = ScriptsPanel()
         self.documentation_panel = DocumentationPanel()
-        self.kanban_panel = KanbanPanel()
         self.testing_panel = TestingPanel()
         self.playtest_panel = PlaytestPanel()
         self.maps_panel = MapsPanel()
@@ -989,7 +977,6 @@ class MainWindow(QWidget):
             "git": self.git_panel,
             "scripts": self.scripts_panel,
             "documentation": self.documentation_panel,
-            "kanban": self.kanban_panel,
             "testing": self.testing_panel,
             "playtest": self.playtest_panel,
             "maps": self.maps_panel,
@@ -1029,8 +1016,6 @@ class MainWindow(QWidget):
         self._set_sidebar_header(view)
         if view == "maps":
             self._refresh_maps_panel()
-        elif view == "kanban":
-            self._show_default_kanban_board()
         if self.explorer_panel.current_folder is None:
             # "when no project is opened, clicking on dashboard, locations or search a blank
             # sidebar should popout" -- the real panel underneath has nothing but its own "no
@@ -1201,7 +1186,6 @@ class MainWindow(QWidget):
             Command(label="Scripts", action=lambda: self.activity_bar.scripts_button.click()),
             Command(label="Map Files", action=lambda: self.activity_bar.maps_button.click()),
             Command(label="Documentation", action=lambda: self.activity_bar.documentation_button.click()),
-            Command(label="Kanban", action=lambda: self.activity_bar.kanban_button.click()),
             Command(label="Testing", action=lambda: self.activity_bar.testing_button.click()),
             Command(label="Playtest", action=lambda: self.activity_bar.playtest_button.click()),
             Command(label="LLM", action=lambda: self.activity_bar.llm_button.click()),
@@ -1218,14 +1202,6 @@ class MainWindow(QWidget):
             Command(label="Disable Script Module", children=self._script_module_toggle_commands(False)),
             Command(label="Launch Halo MCC", action=self.launch_mcc_from_menu, detail=_SHORTCUT_LAUNCH_MCC),
             Command(label="Launch RVT", action=self.launch_rvt_from_menu, detail=_SHORTCUT_LAUNCH_RVT),
-            Command(label="New Kanban Board", action=self.new_kanban_board),
-            Command(
-                label="Open Kanban Board",
-                children=[
-                    Command(label=board.name, action=lambda b=board.id: self._open_kanban_board(b))
-                    for board in self._kanban_boards()
-                ],
-            ),
             Command(label="Select Env", children=self._env_commands()),
             Command(label="New Env", action=self.new_env),
             Command(label="Open Notepad in Editor", action=self.open_notepad_in_editor),
@@ -2018,9 +1994,6 @@ class MainWindow(QWidget):
         for folder in list(self._rvt_processes):
             self._close_rvt_for_project(folder)
         self.explorer_panel.notepad.flush()
-        if self._kanban_store_obj is not None:
-            self._kanban_store_obj.close()
-            self._kanban_store_obj = None
         super().closeEvent(event)
 
     def _current_project_bin(self) -> Path | None:
@@ -3450,7 +3423,7 @@ class MainWindow(QWidget):
 
     def check_script_project(self) -> None:
         """"Check Script" -- runs the active project's script checks (annotations, lint, allocation; for a script project
-        also its modules and fusion) and shows the result on the Problems tab, without writing anything. A no-op with no
+        also its modules and imports) and shows the result on the Problems tab, without writing anything. A no-op with no
         project open."""
         folder = self.explorer_panel.current_folder
         if folder is None:
@@ -3485,7 +3458,8 @@ class MainWindow(QWidget):
 
     def convert_to_project(self) -> None:
         """"Convert to Project" (experimental) -- turns the active project's single script into a script project: adds
-        ``script/project.toml`` and copies the script into ``script/blocks/main.mgl``. Asks first, offering to back
+        ``script/project.toml``, makes each top-level player/object/team loop a module imported (``-- @import``) where it
+        was in ``script/blocks/main.mgl`` (``api.create_script_project``), then opens that block. Asks first, offering to back
         ``script/`` up to ``.in-reach/backups/`` before converting. A no-op with no project open."""
         folder = self.explorer_panel.current_folder
         if folder is None:
@@ -3515,7 +3489,8 @@ class MainWindow(QWidget):
         _logger.info("converted %s to a script project", folder)
         self._refresh_script_views(folder)
         self._refresh_apply_enabled(folder)
-        self.main_panel.active_pane.open_file(folder / written[-1])
+        main_block = next((path for path in written if path.endswith("blocks/main.mgl")), written[-1])
+        self.main_panel.active_pane.open_file(folder / main_block)
         if backup is not None:
             self._report_backup(backup)
 
@@ -3527,9 +3502,11 @@ class MainWindow(QWidget):
         box.setWindowTitle("Convert to Project (experimental)")
         box.setText("Convert this script into a script project?")
         box.setInformativeText(
-            "This is experimental. script/output.mgl is copied to script/blocks/main.mgl and script/project.toml is "
-            "added; from then on the project is built from its blocks and modules, and script/output.mgl is no longer "
-            "compiled. There is no automatic way back.\n\n"
+            "This is experimental. Each top-level 'for each player/object/team' loop in script/output.mgl becomes a "
+            "module in script/modules/, and the rest becomes script/blocks/main.mgl with a '-- @import <module>' line "
+            "where each loop was (so every trigger stays in order), and script/project.toml is added; from then on the "
+            "project is built from its blocks and modules, and script/output.mgl is no longer compiled. There is no "
+            "automatic way back.\n\n"
             "A backup first is recommended: Back Up && Convert copies script/ to .in-reach/backups/ before converting."
         )
         backup_button = box.addButton("Back Up && Convert", QMessageBox.ButtonRole.AcceptRole)
@@ -3580,61 +3557,6 @@ class MainWindow(QWidget):
 
         name, accepted = QInputDialog.getText(self, "New Script Module", "Module name:")
         return name.strip() if accepted else ""
-
-    # -- Kanban (PROMPT.md: "the first pass of Kanban functionality") -----------------------------
-
-    def _kanban_store(self) -> KanbanStore:
-        """The one shared :class:`~in_reach_ide.kanban_db.KanbanStore` for this window -- one
-        database in the project-root ``.in-reach`` folder serving every gametype project -- created
-        on first use, and handed to the sidebar panel (which keeps itself in sync with it)."""
-        if self._kanban_store_obj is None:
-            store = KanbanStore(project.get_project_dir(self.root_dir))
-            store.add_listener(self._on_kanban_changed)
-            self._kanban_store_obj = store
-            self.kanban_panel.set_store(store)
-        return self._kanban_store_obj
-
-    def _on_kanban_changed(self) -> None:
-        self.main_panel.refresh_kanban_tabs()
-
-    def _kanban_project(self, store: KanbanStore):
-        folder = self.explorer_panel.current_folder
-        if folder is None:
-            return None
-        return store.ensure_project(folder.name, new_project.read_project_title(folder))
-
-    def _kanban_boards(self) -> list:
-        """The active project's boards, for the "Open Kanban Board" palette pick -- empty with no
-        project open, or before the store has ever been created (nothing to list yet)."""
-        if self._kanban_store_obj is None or self.explorer_panel.current_folder is None:
-            return []
-        project_row = self._kanban_project(self._kanban_store_obj)
-        return self._kanban_store_obj.list_boards(project_row.id) if project_row else []
-
-    def _show_default_kanban_board(self) -> None:
-        """PROMPT.md: "when clicked it should load the default board in the editor view" -- the
-        Kanban icon opening the sidebar also opens the active project's default board (making a
-        fresh "Main Board" first if it has none yet). A no-op with no project open."""
-        if self.explorer_panel.current_folder is None:
-            return
-        store = self._kanban_store()
-        project_row = self._kanban_project(store)
-        if project_row is None:
-            return
-        board = store.ensure_default_board(project_row.id)
-        self._open_kanban_board(board.id)
-
-    def _open_kanban_board(self, board_id: int) -> None:
-        store = self._kanban_store()
-        self.main_panel.active_pane.open_kanban_board(store, board_id)
-
-    def new_kanban_board(self) -> None:
-        """"New Kanban Board" -- prompts for a name and opens the new board. A no-op with no
-        project open."""
-        if self.explorer_panel.current_folder is None:
-            return
-        self._kanban_store()
-        self.kanban_panel.new_board()
 
     def _notepad_path(self) -> Path | None:
         folder = self.explorer_panel.current_folder

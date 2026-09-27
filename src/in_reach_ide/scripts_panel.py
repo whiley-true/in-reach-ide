@@ -13,7 +13,7 @@ Every project -- a single file or a script project -- gets, top to bottom, each 
 A single file (``script/output.mgl``) adds what it can be written with beyond ReachVariantTool's own syntax, and a
 "Convert to Project" button (experimental: the window asks first, and offers
 a backup). A script project (``script/project.toml``) adds its modules (each with a checkbox), its blocks in build order
-(drag to reorder; each fragment under its block, with "Move to"), Check, Link and New Module, and what fusion did.
+(drag to reorder; each fragment under its block, with "Move to"), Check, Link and New Module.
 
 The panel does no checking of its own: :class:`~in_reach_ide.main_window.MainWindow` checks once per change and hands
 the result to :meth:`ScriptsPanel.show_single` or :meth:`ScriptsPanel.show_link`, the same one the Problems tab reads.
@@ -280,14 +280,10 @@ class ScriptsPanel(QWidget):
         self.blocks_section = _section("Blocks", self.blocks_tree)
         layout.addWidget(self.blocks_section)
 
-        # -- budget (either kind), fusion (a project) --
+        # -- budget (either kind) --
         self.budget_tree = _tree(["", "Used", "Cap"], 60)
         self.budget_box = _section("Budget", self.budget_tree)
         layout.addWidget(self.budget_box)
-
-        self.fusion_tree = _tree(["Result"], 40)
-        self.fusion_box = _section("Fusion", self.fusion_tree)
-        layout.addWidget(self.fusion_box)
         layout.addStretch(1)
         self.show_not_a_project()
 
@@ -298,7 +294,7 @@ class ScriptsPanel(QWidget):
         for widget in (self.envs_box, self.script_section, self.budget_box):
             widget.setVisible(any_project)
         self.single_box.setVisible(single)
-        for widget in (self.linked_box, self.modules_section, self.blocks_section, self.fusion_box):
+        for widget in (self.linked_box, self.modules_section, self.blocks_section):
             widget.setVisible(linked)
 
     def show_not_a_project(self) -> None:
@@ -324,7 +320,6 @@ class ScriptsPanel(QWidget):
         self._fill_modules(result.project)
         self._fill_blocks(result.project, getattr(result, "model", None))
         self._fill_budget(result)
-        self._fill_fusion(result)
 
     def set_status(self, result) -> None:
         """Shows ``result``'s problems line (a :class:`~in_reach.app.script_project.LinkResult`) -- hidden when it has
@@ -477,24 +472,6 @@ class ScriptsPanel(QWidget):
             self.budget_tree.addTopLevelItem(QTreeWidgetItem(["nothing linked yet", "", ""]))
         elif self.budget_tree.topLevelItemCount() == 0:
             self.budget_tree.addTopLevelItem(QTreeWidgetItem(["nothing declared yet", "", ""]))
-
-    def _fill_fusion(self, result) -> None:
-        self.fusion_tree.clear()
-        fusion = result.link_map.get("fusion", {}) if result.link_map else {}
-        for group in fusion.get("groups", []):
-            saved = group.get("saved", {})
-            extras = [f"{count} {what}" for what, count in saved.items() if count]
-            suffix = f" (saves {', '.join(extras)})" if extras else ""
-            forced = f" [force:{group['forced']}]" if group.get("forced") else ""
-            self.fusion_tree.addTopLevelItem(
-                QTreeWidgetItem([f"{group['trigger']}: {' + '.join(group['fragments'])}{suffix}{forced}"])
-            )
-        for declined in fusion.get("declined", []):
-            item = QTreeWidgetItem([f"not fused: {' | '.join(declined['fragments'])} -- {declined['reason']}"])
-            item.setForeground(0, QBrush(_WARN))
-            self.fusion_tree.addTopLevelItem(item)
-        if self.fusion_tree.topLevelItemCount() == 0:
-            self.fusion_tree.addTopLevelItem(QTreeWidgetItem(["nothing to fuse"]))
 
     # -- signals -----------------------------------------------------------------------------------------
 

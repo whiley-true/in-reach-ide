@@ -93,11 +93,13 @@ IDE's "Verify System Settings" -- Tesseract on `PATH`, the Steam / Halo: MCC / g
   ask again", back on in Settings) -- then Script (its problems, only when it has
   any, and Open Script) and Budget; a single file adds, under Script, "Use the button above to edit the Megalo Script. It
   has the same syntax as Reach Variant Tool (a link to its docs) with the following additional features:" and the
-  in-reach annotations it can use, and "Convert to Project (experimental)" (no Check button: the script is checked as it
+  in-reach annotations it can use, and "Convert to Project (experimental)" (each top-level loop becomes a module, imported
+  with `-- @import` where it was in `blocks/main.mgl` -- `api.create_script_project`; opens that block after) (no Check
+  button: the script is checked as it
   is typed, saved, or
   changed on disk -- `MainWindow._script_watcher`), which asks first and offers
   "Back Up && Convert" (`api.backup_script()`); a script project adds modules, blocks (drag to reorder, "Move to"
-  on a fragment), Check/Link/New Module and fusion. It does no checking itself: `MainWindow._refresh_script_views()`
+  on a fragment), Check/Link/New Module. It does no checking itself: `MainWindow._refresh_script_views()`
   checks once per change and feeds it, the Problems tab, the Documentation view and the editor's hover text; every
   open editor underlines its file's Problems-tab entries -- red for an error, amber for a warning, the message on
   hover (`editor.set_problem_provider`, `TextEditorWidget.refresh_problem_marks`, redrawn on
@@ -125,13 +127,7 @@ IDE's "Verify System Settings" -- Tesseract on `PATH`, the Steam / Halo: MCC / g
   Testing/Playtest/LLM are all still placeholder-only stubs -- Map Files `maps_panel.py`, which lists clickable,
   link-styled folder "slugs" for the Map Variants/Hopper Variants/User Maps folders that Verify
   System Settings resolved (each opens that folder in the OS file explorer) plus an "Open In-Reach
-  Maps" button, Kanban `kanban_panel.py` -- the active project's boards (create/open/rename/delete,
-  which is the default, and a background colour or a custom image copied into
-  `.in-reach/kanban/backgrounds/`) -- with the board itself drawn as a Trello-style editor tab
-  (`kanban_board.py`: columns you can add/rename/move/delete, drag-and-drop cards you can add/edit/
-  mark done/delete, per-board labels; `kanban_dialogs.py`: the card, labels and label-colour
-  dialogs); clicking the Kanban icon also opens the project's default board, and the shared SQLite
-  store behind all of it is created lazily the first time the view is used -- Search
+  Maps" button -- Search
   `search_panel.py`, laid out after VSCode's own Search view: Match Case/Match Whole Word/Use
   Regular Expression toggles inside the query box, a chevron that reveals a replace row (Preserve
   Case, Replace All), and a "..." toggle that reveals "files to include" (with a "Search only in
@@ -147,8 +143,8 @@ IDE's "Verify System Settings" -- Tesseract on `PATH`, the Steam / Halo: MCC / g
   emits, a Settings popout (`settings_dialog.py`) with a live theme picker (`theme.py`/
   `theme_picker.py`), and a VSCode-style command palette (`quick_access.py`).
 
-- `src/in_reach_ide/kanban_db.py`, `project_search.py`, `quick_open.py`, `indent_settings.py`, `recent.py` -- the
-  framework-agnostic helpers only the IDE uses (they used to live in `in_reach.app`): the SQLite Kanban store, project
+- `src/in_reach_ide/project_search.py`, `quick_open.py`, `indent_settings.py`, `recent.py` -- the
+  framework-agnostic helpers only the IDE uses (they used to live in `in_reach.app`): project
   text search/replace, quick-open file listing, per-file indentation settings, the recent-projects list.
 - `src/in_reach_ide/cli.py` -- `in-reach-ide` / `launch()`; `app.py` -- builds the `QApplication` and runs it.
 - `src/in_reach_ide/problems_panel.py`, `scripts_panel.py`, `megalo_highlighter.py` -- the script-project views (Problems tab,

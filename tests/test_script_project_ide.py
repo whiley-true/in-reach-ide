@@ -184,7 +184,7 @@ def _with_release(folder: Path) -> Path:
     return folder
 
 
-def test_the_scripts_view_shows_a_script_projects_modules_blocks_budget_and_fusion(qtbot, tmp_path: Path) -> None:
+def test_the_scripts_view_shows_a_script_projects_modules_blocks_and_budget(qtbot, tmp_path: Path) -> None:
     folder = _linked_project(tmp_path)
     result = link(folder, write=False)
     panel = ScriptsPanel()
@@ -193,7 +193,8 @@ def test_the_scripts_view_shows_a_script_projects_modules_blocks_budget_and_fusi
 
     panel.show_link(folder, result, api.envs(folder))
 
-    assert panel.linked_box.isVisible() and panel.fusion_box.isVisible() and not panel.single_box.isVisible()
+    assert panel.linked_box.isVisible() and not panel.single_box.isVisible()
+    assert not hasattr(panel, "fusion_box")  # fusion was removed
     assert panel.envs_box.isVisible() and panel.budget_box.isVisible()
     assert panel.modules_section.isVisible() and panel.blocks_section.isVisible()
     assert panel.status_label.text() == "" and not panel.status_label.isVisible()  # nothing wrong: nothing said
@@ -203,7 +204,6 @@ def test_the_scripts_view_shows_a_script_projects_modules_blocks_budget_and_fusi
     assert "fragments only" in panel.blocks_tree.topLevelItem(1).text(1)
     rows = {panel.budget_tree.topLevelItem(i).text(0): panel.budget_tree.topLevelItem(i).text(1) for i in range(panel.budget_tree.topLevelItemCount())}
     assert rows["global.number"] == "2" and rows["traits"] == "1"
-    assert "HILL_PASS: hill_score.score + hill_buff.buff" in panel.fusion_tree.topLevelItem(0).text(0)
 
 
 def test_the_envs_list_is_one_column_of_names_with_a_star_left_of_the_active_one(qtbot, tmp_path: Path) -> None:
@@ -342,7 +342,7 @@ def test_a_link_that_fails_says_so_and_a_near_full_pool_is_flagged(qtbot, tmp_pa
     assert over.toolTip(0) == "112% of 8"
 
 
-def test_an_empty_link_map_and_nothing_to_fuse_say_so(qtbot, tmp_path: Path) -> None:
+def test_an_empty_link_map_says_so(qtbot, tmp_path: Path) -> None:
     folder = _linked_project(tmp_path)
     result = link(folder, write=False)
     result.link_map = {}
@@ -352,7 +352,6 @@ def test_an_empty_link_map_and_nothing_to_fuse_say_so(qtbot, tmp_path: Path) -> 
     panel.show_link(folder, result, api.envs(folder))
 
     assert panel.budget_tree.topLevelItem(0).text(0) == "nothing linked yet"
-    assert panel.fusion_tree.topLevelItem(0).text(0) == "nothing to fuse"
 
 
 def test_a_single_file_shows_its_state_envs_budget_and_the_convert_button(qtbot, tmp_path: Path) -> None:
@@ -365,7 +364,7 @@ def test_a_single_file_shows_its_state_envs_budget_and_the_convert_button(qtbot,
     panel.show_single(folder, link(folder, write=False), api.envs(folder))
 
     assert panel.single_box.isVisible() and panel.envs_box.isVisible() and panel.budget_box.isVisible()
-    assert not panel.linked_box.isVisible() and not panel.fusion_box.isVisible()
+    assert not panel.linked_box.isVisible()
     assert not panel.modules_section.isVisible() and not panel.blocks_section.isVisible()
     assert not panel.status_label.isVisible()
     assert panel.budget_tree.topLevelItem(0).text(0) == "global.number"
@@ -525,6 +524,36 @@ def test_convert_to_project_turns_a_single_script_into_one(project_window, tmp_p
     assert project_window.main_panel.active_pane.widget(project_window.main_panel.active_pane.currentIndex()).path == (
         folder / "script" / "blocks" / "main.mgl"
     )
+
+
+def test_convert_to_project_makes_each_loop_a_module_and_opens_the_main_block(project_window, tmp_path: Path, monkeypatch) -> None:
+    """PROMPT.md: converting turns the script into modules -- and the editor still opens the main block, not
+    whichever module file happened to be written last."""
+    folder = _single_file_project(tmp_path)
+    (folder / "script" / "output.mgl").write_text(
+        "global.number[0] = 1\nfor each player do\n   current_player.number[0] = 1\nend\n", encoding="utf-8"
+    )
+    project_window._on_project_opened(folder)
+    monkeypatch.setattr(project_window, "_confirm_convert_to_project", lambda: "convert")
+
+    project_window.convert_to_project()
+
+    module = folder / "script" / "modules" / "player_loop_1" / "player_loop_1.mgl"
+    assert module.read_text(encoding="utf-8") == "-- @loop player\ncurrent_player.number[0] = 1\n"  # no @fragment: its @import places it
+    # the block shows where the module's code comes in
+    assert (folder / "script" / "blocks" / "main.mgl").read_text(encoding="utf-8") == "global.number[0] = 1\n-- @import player_loop_1\n"
+    assert project_window.main_panel.active_pane.widget(project_window.main_panel.active_pane.currentIndex()).path == (
+        folder / "script" / "blocks" / "main.mgl"
+    )
+
+
+def test_the_convert_dialog_says_loops_become_modules(project_window, monkeypatch) -> None:
+    seen = {}
+    monkeypatch.setattr(QMessageBox, "exec", lambda box: seen.setdefault("info", box.informativeText()) and 0)
+
+    project_window._confirm_convert_to_project()
+
+    assert "module" in seen["info"] and "in order" in seen["info"]
 
 
 def test_cancelling_convert_to_project_changes_nothing(project_window, tmp_path: Path, monkeypatch) -> None:
@@ -953,9 +982,9 @@ def test_every_part_of_the_scripts_view_is_a_collapsible_section(qtbot, tmp_path
     panel.show()
     folder = _single_file_project(tmp_path)
     panel.show_single(folder, link(folder, write=False), api.envs(folder))
-    sections = [panel.envs_box, panel.script_section, panel.modules_section, panel.blocks_section, panel.budget_box, panel.fusion_box]
+    sections = [panel.envs_box, panel.script_section, panel.modules_section, panel.blocks_section, panel.budget_box]
 
     assert all(isinstance(section, CollapsibleSection) for section in sections)
-    assert [section._toggle.text() for section in sections] == ["Envs", "Script", "Modules", "Blocks", "Budget", "Fusion"]
+    assert [section._toggle.text() for section in sections] == ["Envs", "Script", "Modules", "Blocks", "Budget"]
     panel.script_section.set_expanded(False)
     assert not panel.open_script_button.isVisible()

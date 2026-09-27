@@ -1,7 +1,7 @@
 """The bottom panel's "Problems" tab: what is wrong with the active project's script, each line clickable.
 
 Two things feed it (see :class:`~in_reach_ide.main_window.MainWindow`): the checks of a linked script project (the
-project model, linter, allocation and fusion, re-run whenever a file is saved) and the messages a failed Apply got back
+project model, linter and allocation, re-run whenever a file is saved) and the messages a failed Apply got back
 from the compiler -- mapped, for a linked project, to the *source* file and line that produced them.
 
 A :class:`Problem` is plain data, built from an :class:`in_reach.api.Diagnostic` or a

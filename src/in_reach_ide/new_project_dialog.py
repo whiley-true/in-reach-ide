@@ -14,6 +14,7 @@ project folder is a generated id now, not the title -- see that function's own d
 
 from __future__ import annotations
 
+import re
 from pathlib import Path
 
 from PyQt6.QtCore import QEvent, Qt
@@ -52,6 +53,13 @@ _TITLE_HELP = f"1-{new_project.MAX_TITLE_LENGTH} characters."
 _VARIANT_DROPDOWN_MAX_VISIBLE_ITEMS = 12
 #: The category a new project starts with (Firefight has none -- see NewProjectDialog.category).
 DEFAULT_CATEGORY = EngineCategory.slayer
+#: MCC's own Slayer is ``game_variants/slayer_054.bin``; any ``slayer_<n>`` is taken so a newer build still matches.
+_SLAYER_STEM = re.compile(r"slayer(_\d+)?", re.IGNORECASE)
+
+
+def default_slayer(variants: list[tuple[str, Path]]) -> str | None:
+    """The name of plain Slayer among ``variants`` (the Built-in variant box's default), else ``None``."""
+    return next((name for name, path in variants if _SLAYER_STEM.fullmatch(path.stem)), None)
 
 
 class NewProjectDialog(QDialog):
@@ -62,6 +70,7 @@ class NewProjectDialog(QDialog):
         variants: list[tuple[str, Path]] | None = None,
         source_label: str = "Start from",
         ask_game_type: bool = False,
+        default_variant: str | None = None,
     ) -> None:
         """
         Args:
@@ -69,6 +78,9 @@ class NewProjectDialog(QDialog):
             variants: ``(name, path)`` pairs to offer as the project's starting variant. ``None``
                 (or empty) drops the chooser entirely -- a blank project.
             source_label: Field label for that chooser, e.g. ``"Built-in variant"``.
+            default_variant: The name of the variant used when none is typed or picked, shown as the
+                chooser's grey placeholder (PROMPT.md: the built-in variant defaults to Slayer). Clicking
+                into the box clears it to type; leaving it empty brings the placeholder back.
             ask_game_type: Whether to show the Multiplayer/Firefight picker -- only the "New Blank
                 Project" flow needs this (PROMPT.md: "blank gametypes should also ask if
                 multiplayer or firefight"); the other two flows already know their game type from
@@ -79,6 +91,7 @@ class NewProjectDialog(QDialog):
         super().__init__(parent)
         self._variants = variants or []
         self._ask_game_type = ask_game_type
+        self._default_variant = default_variant if any(name == default_variant for name, _ in self._variants) else None
 
         self.setWindowTitle("New Project")
         self.setModal(True)
@@ -141,6 +154,9 @@ class NewProjectDialog(QDialog):
             completer.setFilterMode(Qt.MatchFlag.MatchContains)
             completer.setCompletionMode(QCompleter.CompletionMode.PopupCompletion)
             self.variant_combo.setCompleter(completer)
+            if self._default_variant is not None:
+                self.variant_combo.lineEdit().installEventFilter(self)
+                self._show_default_placeholder()
             form.addRow(source_label, self.variant_combo)
         else:
             self.variant_combo.hide()
@@ -203,7 +219,18 @@ class NewProjectDialog(QDialog):
                 self.description_help_label.setEnabled(True)
             elif event.type() == QEvent.Type.FocusOut:
                 self.description_help_label.setEnabled(False)
+        elif self._default_variant is not None and obj is self.variant_combo.lineEdit():
+            if event.type() == QEvent.Type.FocusIn and not obj.text():
+                obj.setPlaceholderText("")
+            elif event.type() == QEvent.Type.FocusOut and not obj.text().strip():
+                self._show_default_placeholder()
         return super().eventFilter(obj, event)
+
+    def _show_default_placeholder(self) -> None:
+        """Nothing chosen: the box is empty, with the default variant's name greyed in as its placeholder."""
+        self.variant_combo.setCurrentIndex(-1)
+        self.variant_combo.lineEdit().clear()
+        self.variant_combo.lineEdit().setPlaceholderText(self._default_variant)
 
     def title(self) -> str:
         return self.title_edit.text().strip()
@@ -238,5 +265,9 @@ class NewProjectDialog(QDialog):
             return blank_variant.resolve_blank_variant(firefight=self.is_firefight())
         if not self._variants:
             return None
-        data = self.variant_combo.currentData()
+        text = self.variant_combo.currentText().strip()
+        if self._default_variant is not None and not text:
+            text = self._default_variant
+        index = self.variant_combo.findText(text)
+        data = self.variant_combo.itemData(index) if index >= 0 else self.variant_combo.currentData()
         return Path(data) if data else None

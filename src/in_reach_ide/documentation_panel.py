@@ -229,9 +229,6 @@ class DocumentationPanel(QWidget):
         for name, where in shown.items():
             places = ", ".join(html.escape(w) for w in where) or "nothing"
             rows.append(f"<p style='margin:2px 0'><b>{html.escape(name)}</b> &mdash; {places}</p>")
-        if tag in docs.tags:
-            count = len(self.shown_docs().notes)
-            rows.append(f"<p style='margin:6px 0 0 0; color:#888888'>{count} entr{'y' if count == 1 else 'ies'} in what carries it.</p>")
         return "".join(rows)
 
     def _selected_entry(self) -> tuple[str, int, str, str] | None:

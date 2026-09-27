@@ -1,7 +1,9 @@
 from pathlib import Path
 
 import pytest
-from PyQt6.QtWidgets import QDialog, QLabel
+from PyQt6.QtCore import QEvent
+from PyQt6.QtGui import QFocusEvent
+from PyQt6.QtWidgets import QApplication, QDialog, QLabel
 
 from in_reach.app import env_file, new_project
 from within_reach import system_verify
@@ -9,7 +11,7 @@ from in_reach_ide import recent
 from in_reach.app.categories import EngineCategory
 from in_reach.app.rvt import rvt_bridge
 from within_reach.system_verify import Outcome, VerifyRun
-from in_reach_ide.new_project_dialog import NewProjectDialog
+from in_reach_ide.new_project_dialog import NewProjectDialog, default_slayer
 from in_reach_ide.verify_dialog import VerifyDialog
 from in_reach_ide.welcome import WelcomeTab
 
@@ -588,6 +590,78 @@ def test_variant_dropdown_is_editable_and_searchable(qtbot, tmp_path: Path) -> N
     assert dialog.variant_combo.isEditable() is True
     assert dialog.variant_combo.completer() is not None
     assert dialog.variant_combo.insertPolicy() == dialog.variant_combo.InsertPolicy.NoInsert
+
+
+# -- the built-in variant defaults to Slayer, shown as a placeholder (PROMPT.md) -------------------------
+
+
+_BUILT_IN = [("Standard: oddball_054", Path("oddball_054.bin")), ("Standard: slayer_054", Path("slayer_054.bin")),
+             ("Standard: slayer_pro_054", Path("slayer_pro_054.bin")), ("Hopper: hr_4v4_team_slayer", Path("t.bin"))]
+
+
+def _focus(widget, focus_in: bool) -> None:
+    QApplication.sendEvent(widget, QFocusEvent(QEvent.Type.FocusIn if focus_in else QEvent.Type.FocusOut))
+
+
+def _default_dialog(qtbot) -> NewProjectDialog:
+    dialog = NewProjectDialog(variants=_BUILT_IN, source_label="Built-in variant", default_variant=default_slayer(_BUILT_IN))
+    qtbot.addWidget(dialog)
+    return dialog
+
+
+def test_plain_slayer_is_the_built_in_default() -> None:
+    assert default_slayer(_BUILT_IN) == "Standard: slayer_054"
+    assert default_slayer([("Standard: oddball_054", Path("oddball_054.bin"))]) is None
+
+
+def test_the_default_is_a_grey_placeholder_not_text(qtbot) -> None:
+    dialog = _default_dialog(qtbot)
+    line = dialog.variant_combo.lineEdit()
+
+    assert line.text() == ""
+    assert line.placeholderText() == "Standard: slayer_054"  # drawn in the palette's placeholder (grey) colour
+    assert dialog.selected_variant() == Path("slayer_054.bin")
+
+
+def test_clicking_into_the_box_clears_it_to_type(qtbot) -> None:
+    dialog = _default_dialog(qtbot)
+    line = dialog.variant_combo.lineEdit()
+
+    _focus(line, True)
+
+    assert line.text() == "" and line.placeholderText() == ""
+
+
+def test_leaving_it_empty_brings_the_slayer_placeholder_back(qtbot) -> None:
+    dialog = _default_dialog(qtbot)
+    line = dialog.variant_combo.lineEdit()
+    _focus(line, True)
+    line.setText("   ")
+
+    _focus(line, False)
+
+    assert line.text() == "" and line.placeholderText() == "Standard: slayer_054"
+    assert dialog.selected_variant() == Path("slayer_054.bin")
+
+
+def test_a_typed_variant_is_kept_and_chosen(qtbot) -> None:
+    dialog = _default_dialog(qtbot)
+    line = dialog.variant_combo.lineEdit()
+    _focus(line, True)
+    line.setText("Standard: oddball_054")
+
+    _focus(line, False)
+
+    assert line.text() == "Standard: oddball_054"
+    assert dialog.selected_variant() == Path("oddball_054.bin")
+
+
+def test_a_personal_variant_box_has_no_default(qtbot, tmp_path: Path) -> None:
+    dialog = NewProjectDialog(variants=[("Slayer", tmp_path / "Slayer.bin")], source_label="Personal variant")
+    qtbot.addWidget(dialog)
+
+    assert dialog.variant_combo.currentText() == "Slayer"
+    assert dialog.variant_combo.lineEdit().placeholderText() == ""
 
 
 # -- the Verify Now popout --------------------------------------------------------------------------

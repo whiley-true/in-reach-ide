@@ -427,7 +427,8 @@ def test_the_tag_filter_narrows_the_entries_and_says_what_carries_the_tag(qtbot,
     assert [m.name for m in panel.shown_docs().modules] == ["hill_buff"]
     assert panel.entries() == []
     info = panel.tag_info.toPlainText()
-    assert "buffs" in info and "module hill_buff" in info and "0 entries" in info
+    assert "buffs" in info and "module hill_buff" in info
+    assert "carries it" not in info  # no "N entries in what carries it" line (PROMPT.md)
     panel.set_tag(None)
     assert panel.entries()
 

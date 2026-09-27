@@ -36,7 +36,7 @@ from in_reach.app import env_file, new_project, project
 from within_reach import system_verify
 from in_reach_ide import recent
 from in_reach_ide import file_dialogs, icons
-from in_reach_ide.new_project_dialog import NewProjectDialog
+from in_reach_ide.new_project_dialog import NewProjectDialog, default_slayer
 
 _ICON_SIZE = 16
 
@@ -294,7 +294,11 @@ class WelcomeTab(QWidget):
         if not variants:
             QMessageBox.information(self, "in-reach", "No game variants found in those folders.")
             return
-        self._create_project_from(NewProjectDialog(self, variants=variants, source_label="Built-in variant"))
+        self._create_project_from(
+            NewProjectDialog(
+                self, variants=variants, source_label="Built-in variant", default_variant=default_slayer(variants)
+            )
+        )
 
     def new_personal_project(self) -> None:
         folder = self._env_values().get(system_verify.PERSONAL_VARIANTS_KEY, "")

@@ -926,7 +926,6 @@ def test_activity_bar_default_icon_order(qtbot) -> None:
         "scripts",
         "maps",
         "documentation",
-        "kanban",
         "testing",
         "playtest",
         "llm",
@@ -943,7 +942,7 @@ def test_activity_bar_loads_a_persisted_order_from_env(qtbot, tmp_path: Path) ->
     bar = ActivityBar(env_path=env_path)
     qtbot.addWidget(bar)
 
-    # git/scripts/documentation/kanban/testing/playtest/llm aren't named in the saved order at all --
+    # git/scripts/documentation/testing/playtest/llm aren't named in the saved order at all --
     # appended after it, in their existing (default) relative order, same as any other icon added
     # after a user's own .env was written. "compile" is pinned (PROMPT.md: "the compile icon should
     # be stuck to the top") -- it sorts to the front regardless of where the saved order put it.
@@ -955,7 +954,6 @@ def test_activity_bar_loads_a_persisted_order_from_env(qtbot, tmp_path: Path) ->
         "git",
         "scripts",
         "documentation",
-        "kanban",
         "testing",
         "playtest",
         "llm",
@@ -985,7 +983,6 @@ def test_activity_bar_ignores_a_stale_persisted_order_gracefully(qtbot, tmp_path
         "git",
         "scripts",
         "documentation",
-        "kanban",
         "testing",
         "playtest",
         "maps",
@@ -4879,21 +4876,6 @@ def test_documentation_button_switches_the_sidebar_to_its_own_panel(
     assert project_window.activity_bar.documentation_button.isChecked() is True
 
 
-def test_kanban_button_switches_the_sidebar_to_its_own_panel(
-    project_window: MainWindow, tmp_path: Path
-) -> None:
-    # PROMPT.md: "under documentation please add an icon for Kanban, this should be stubbed for
-    # now (please add entry into view)".
-    folder = tmp_path / "project"
-    folder.mkdir()
-    project_window._on_project_opened(folder)
-
-    project_window.activity_bar.kanban_button.click()
-
-    assert project_window._sidebar_stack.currentWidget() is project_window.kanban_panel
-    assert project_window.activity_bar.kanban_button.isChecked() is True
-
-
 def test_maps_button_switches_the_sidebar_to_its_own_panel(
     project_window: MainWindow, tmp_path: Path
 ) -> None:
@@ -4983,7 +4965,6 @@ _HEADER_VIEWS = (
     ("scripts_button", "Scripts"),
     ("maps_button", "Map Files"),
     ("documentation_button", "Documentation"),
-    ("kanban_button", "Kanban"),
     ("testing_button", "Testing"),
     ("playtest_button", "Playtest"),
     ("llm_button", "LLM"),
@@ -5258,10 +5239,9 @@ def test_view_menu_has_command_palette_appearance_panel_switches_and_view_logs_i
     # the Dashboard's own button row, see explorer.py), so they're not menu entries here. A later
     # PROMPT.md pass moved "Documentation" below "Testing" ("move documention to come below testing
     # in default order and in the top bar view"). A further pass ("please move search magnifying
-    # glass to come under dashboard ... and move in view topbar tap"; "under documentation please
-    # add an icon for Kanban ... please move tests to come before llm (and re-arrange order in
-    # view)") moved Search up under Dashboard, added Kanban right after Documentation, and moved
-    # Testing to sit directly ahead of LLM. A further pass ("add command palette shortcuts and
+    # glass to come under dashboard ... and move in view topbar tap"; "please move tests to come
+    # before llm (and re-arrange order in view)") moved Search up under Dashboard and moved Testing
+    # to sit directly ahead of LLM. A further pass ("add command palette shortcuts and
     # entries for all present functionality") added Settings and Toggle Sidebar/Toggle Panel.
     # A further pass (wider spaces/word wrap) added Toggle Word Wrap alongside them.
     menu = project_window.top_bar.view_menu_button.menu()
@@ -5280,7 +5260,6 @@ def test_view_menu_has_command_palette_appearance_panel_switches_and_view_logs_i
         "Scripts",
         "Map Files",
         "Documentation",
-        "Kanban",
         "Testing",
         "Playtest",
         "LLM",
@@ -5886,7 +5865,6 @@ def test_command_palette_entries_show_their_real_shortcut_as_detail(
         "Scripts",
         "Map Files",
         "Documentation",
-        "Kanban",
         "Testing",
         "Playtest",
         "LLM",

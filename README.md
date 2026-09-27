@@ -2,7 +2,7 @@
 
 A desktop IDE for Halo: Reach Megalo game variants -- a VSCode-shaped editor over the
 [`in-reach`](https://pypi.org/project/in-reach/) library: project explorer, script editor with Megalo syntax colouring,
-a Problems tab, a Scripts view (modules, blocks, storage budget, fusion), version history, Kanban, search, and one-click
+a Problems tab, a Scripts view (modules, blocks, storage budget), version history, search, and one-click
 build, RVT and MCC launch.
 
 ```
